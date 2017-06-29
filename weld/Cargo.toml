@@ -6,6 +6,7 @@ authors = ["Roy Jacobs <hello@royjacobs.org>"]
 [dependencies]
 gleam = "0.4.7"
 servo-glutin = "0.11"
+id_tree = "1.1.2"
 
 [dependencies.webrender_traits]
 git = "https://github.com/servo/webrender"

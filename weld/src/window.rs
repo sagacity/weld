@@ -2,6 +2,7 @@ use gleam::gl;
 use glutin;
 use webrender;
 use webrender_traits::*;
+//use node_tree::NodeTree;
 
 struct Notifier {
     window_proxy: glutin::WindowProxy,
@@ -35,7 +36,8 @@ struct WebrenderWindow {
     window: glutin::Window,
     renderer: webrender::Renderer,
     api: RenderApi,
-    size: DeviceUintSize,
+    size: DeviceUintSize, 
+    //tree: NodeTree,
 }
 
 impl WindowFactory {
@@ -77,7 +79,7 @@ impl WindowFactory {
         };
 
         let size = DeviceUintSize::new(width, height);
-        let (mut renderer, sender) = webrender::renderer::Renderer::new(gl, opts, size).unwrap();
+        let (renderer, sender) = webrender::renderer::Renderer::new(gl, opts, size).unwrap();
         let api = sender.create_api();
 
         let notifier = Box::new(Notifier::new(window.create_window_proxy()));
@@ -90,10 +92,10 @@ impl WindowFactory {
         let layout_size = LayoutSize::new(width as f32, height as f32);
         let mut builder = DisplayListBuilder::new(pipeline_id, layout_size);
 
-        let stackingBounds = LayoutRect::new(LayoutPoint::new(0.0, 0.0),
-                                             LayoutSize::new(250.0, 250.0));
+        let stacking_bounds = LayoutRect::new(LayoutPoint::new(0.0, 0.0),
+                                              LayoutSize::new(250.0, 250.0));
         builder.push_stacking_context(ScrollPolicy::Scrollable,
-                                      stackingBounds,
+                                      stacking_bounds,
                                       None,
                                       TransformStyle::Flat,
                                       None,
@@ -103,7 +105,7 @@ impl WindowFactory {
         let bounds = LayoutRect::new(LayoutPoint::new(50.0, 50.0), LayoutSize::new(100.0, 100.0));
         builder.push_rect(bounds, bounds, ColorF::new(1.0, 1.0, 1.0, 1.0));
         builder.push_box_shadow(bounds,
-                                stackingBounds,
+                                stacking_bounds,
                                 bounds,
                                 LayoutVector2D::new(5.0, 5.0),
                                 ColorF::new(0.5, 0.5, 0.5, 0.5),
@@ -125,7 +127,8 @@ impl WindowFactory {
             window: window,
             renderer: renderer,
             api: api,
-            size: size,
+            size: size, 
+            //tree: NodeTree::new(),
         });
     }
 }
@@ -146,6 +149,10 @@ impl Window for WebrenderWindow {
                     glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
                     glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Q)) => {
                         break 'outer
+                    }
+
+                    glutin::Event::Resized(width, height) => {
+                        self.size = DeviceUintSize::new(width, height);
                     }
 
                     glutin::Event::KeyboardInput(glutin::ElementState::Pressed,
