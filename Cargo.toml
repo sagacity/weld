@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "weld"
+]
+
+[profile.release]
+debug = true

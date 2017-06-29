@@ -1,0 +1,14 @@
+[package]
+name = "weld"
+version = "0.1.0"
+authors = ["Roy Jacobs <hello@royjacobs.org>"]
+
+[dependencies]
+gleam = "0.4.7"
+servo-glutin = "0.11"
+
+[dependencies.webrender_traits]
+git = "https://github.com/servo/webrender"
+
+[dependencies.webrender]
+git = "https://github.com/servo/webrender"
