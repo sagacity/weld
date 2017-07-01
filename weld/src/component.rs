@@ -19,10 +19,8 @@ pub struct Component {
 }
 
 impl Component {
-    fn new_label(caption: &'static str) -> Component {
-        let mut bag = DataBag::new();
-        bag.put(Caption { caption: caption });
-        Component { data_bag: bag }
+    fn new() -> Component {
+        Component { data_bag: DataBag::new() }
     }
 }
 
@@ -36,6 +34,29 @@ impl Label for Component {
     }
 }
 
+pub struct LabelBuilder {
+    caption: &'static str,
+}
+
+impl LabelBuilder {
+    pub fn new() -> Self {
+        Self { caption: "Untitled" }
+    }
+
+    pub fn caption(mut self, caption: &'static str) -> Self {
+        self.caption = caption;
+        self
+    }
+}
+
+impl Into<Component> for LabelBuilder {
+    fn into(self) -> Component {
+        let mut c = Component::new();
+        c.data_bag.put(Caption { caption: self.caption });
+        c
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -44,9 +65,10 @@ mod tests {
     #[test]
     fn test_tree() {
         let mut tree = ComponentTree::new();
-        let root = tree.add_node(Component::new_label("Parent"), None);
-        let child = tree.add_node(Component::new_label("Child"), Some(&root));
-        let child2 = tree.add_node(Component::new_label("Child2"), Some(&root));
+
+        let root = tree.add_node(LabelBuilder::new().caption("Parent"), None);
+        let child = tree.add_node(LabelBuilder::new().caption("Child"), Some(&root));
+        let child2 = tree.add_node(LabelBuilder::new().caption("Child2"), Some(&root));
 
         assert_eq!((tree.get(&root) as &Label).get_caption().unwrap().caption,
                    "Parent");

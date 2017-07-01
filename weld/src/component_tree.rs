@@ -11,8 +11,11 @@ impl ComponentTree {
         ComponentTree { tree: TreeBuilder::new().build() }
     }
 
-    pub fn add_node(&mut self, component: Component, parent: Option<&NodeId>) -> NodeId {
-        let boxed = Box::new(component);
+    pub fn add_node<T: Into<Component>>(&mut self,
+                                        component: T,
+                                        parent: Option<&NodeId>)
+                                        -> NodeId {
+        let boxed = Box::new(component.into());
 
         match parent {
             Some(parent_id) => {
