@@ -1,96 +1,54 @@
 #![allow(dead_code)]
+#![allow(unused_variables)]
 
-pub enum Children<'a> {
-    None,
-    Single(&'a Box<Component>),
-    Multiple(&'a Vec<Box<Component>>),
+use data_bag::DataBag;
+
+#[derive(Debug, PartialEq)]
+pub struct Size {
+    width: f64,
+    height: f64,
 }
 
-pub trait Component {
-    fn get_type(&self) -> &'static str;
-
-    fn get_children<'a>(&'a self) -> Children<'a> {
-        Children::None
-    }
-}
-
-pub struct Center {
-    child: Box<Component>,
-}
-
-pub struct Button {
+#[derive(Debug, PartialEq)]
+pub struct Caption {
     caption: &'static str,
 }
 
-pub struct Label {
-    text: &'static str,
+pub struct Component {
+    data_bag: DataBag,
 }
 
-pub struct Column {
-    children: Vec<Box<Component>>,
-}
-
-impl Component for Button {
-    fn get_type(&self) -> &'static str {
-        "Button"
-    }
-}
-impl Component for Label {
-    fn get_type(&self) -> &'static str {
-        "Label"
+impl Component {
+    fn new_label(caption: &'static str) -> Component {
+        let mut bag = DataBag::new();
+        bag.put(Caption { caption: caption });
+        Component { data_bag: bag }
     }
 }
 
-impl Component for Center {
-    fn get_type(&self) -> &'static str {
-        "Center"
-    }
-
-    fn get_children<'a>(&'a self) -> Children<'a> {
-        Children::Single(&self.child)
-    }
+pub trait Label {
+    fn get_caption(&self) -> Option<&Caption>;
 }
 
-impl Component for Column {
-    fn get_type(&self) -> &'static str {
-        "Column"
-    }
-
-    fn get_children<'a>(&'a self) -> Children<'a> {
-        Children::Multiple(&self.children)
+impl Label for Component {
+    fn get_caption(&self) -> Option<&Caption> {
+        self.data_bag.get::<Caption>()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use component_tree::ComponentTree;
 
     #[test]
-    fn test_builder() {
-        let root = make_default();
-        traverse(&root);
-        panic!("-------------------------");
-    }
+    fn test_tree() {
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(Component::new_label("Parent"), None);
+        let child = tree.add_node(Component::new_label("Child"), Some(&root));
+        let child2 = tree.add_node(Component::new_label("Child2"), Some(&root));
 
-    fn traverse(c: &Box<Component>) {
-        println!("{}", c.get_type());
-        {
-            match c.get_children() {
-                Children::Single(child) => traverse(child),
-                Children::Multiple(children) => {
-                    for child in children.iter() {
-                        traverse(child);
-                    }
-                }
-                Children::None => {}
-            }
-        }
-    }
-
-    fn make_default() -> Box<Component> {
-        let button = Box::new(Button { caption: "Click me" });
-        let label = Box::new(Label { text: "Hello" });
-
-        Box::new(Center { child: Box::new(Column { children: vec![button, label] }) })
+        assert_eq!((tree.get(&root) as &Label).get_caption().unwrap().caption,
+                   "Parent");
     }
 }
