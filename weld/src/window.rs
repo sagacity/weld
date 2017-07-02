@@ -3,6 +3,7 @@ use glutin;
 use webrender;
 use webrender_traits::*;
 use weld_core::component_tree::ComponentTree;
+use theme::Theme;
 
 struct Notifier {
     window_proxy: glutin::WindowProxy,
@@ -28,6 +29,7 @@ impl RenderNotifier for Notifier {
 
 pub trait Window {
     fn run(&mut self);
+    fn update_tree(&mut self, tree_builder: &Fn() -> ComponentTree);
 }
 
 pub struct WindowFactory;
@@ -38,6 +40,7 @@ struct WebrenderWindow {
     api: RenderApi,
     size: DeviceUintSize, 
     tree: ComponentTree,
+    theme: Theme
 }
 
 impl WindowFactory {
@@ -129,6 +132,7 @@ impl WindowFactory {
             api: api,
             size: size, 
             tree: ComponentTree::new(),
+            theme: Theme::new()
         });
     }
 }
@@ -171,5 +175,25 @@ impl Window for WebrenderWindow {
             self.renderer.render(self.size);
             self.window.swap_buffers().ok();
         }
+    }
+
+    fn update_tree(&mut self, tree_builder: &Fn() -> ComponentTree) {
+        self.tree = tree_builder();
+
+        let pipeline_id = PipelineId(0, 0);
+        let layout_size = LayoutSize::new(self.size.width as f32, self.size.height as f32);
+        let mut builder = DisplayListBuilder::new(pipeline_id, layout_size);
+        self.theme.build_display_list(&mut builder, &self.tree);
+
+        let epoch = Epoch(1);
+        let root_background_color = ColorF::new(0.0, 0.3, 0.0, 1.0);
+        self.api.set_display_list(Some(root_background_color),
+                             epoch,
+                             layout_size,
+                             builder.finalize(),
+                             true);
+
+        self.api.set_root_pipeline(pipeline_id);
+        self.api.generate_frame(None);
     }
 }

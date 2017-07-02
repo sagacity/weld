@@ -1,5 +1,10 @@
 use data_bag::DataBag;
 
+pub enum Type {
+    Panel,
+    Label
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Size {
     width: f64,
@@ -7,11 +12,20 @@ pub struct Size {
 }
 
 pub struct Component {
-    pub(crate) data_bag: DataBag,
+    pub component_type: Type,
+    data_bag: DataBag,
 }
 
 impl Component {
-    pub(crate) fn new() -> Component {
-        Component { data_bag: DataBag::new() }
+    pub ( crate ) fn new(t: Type) -> Component {
+        Component { component_type: t, data_bag: DataBag::new() }
+    }
+
+    pub fn data(&self) -> &DataBag {
+        &self.data_bag
+    }
+
+    pub fn data_mut(&mut self) -> &mut DataBag {
+        &mut self.data_bag
     }
 }

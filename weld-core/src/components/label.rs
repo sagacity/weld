@@ -1,4 +1,4 @@
-use components::component::Component;
+use components::component::*;
 
 #[derive(Debug, PartialEq)]
 pub struct Caption {
@@ -11,7 +11,7 @@ pub trait Label {
 
 impl Label for Component {
     fn get_caption(&self) -> Option<&Caption> {
-        self.data_bag.get::<Caption>()
+        self.data().get::<Caption>()
     }
 }
 
@@ -32,8 +32,8 @@ impl LabelBuilder {
 
 impl Into<Component> for LabelBuilder {
     fn into(self) -> Component {
-        let mut c = Component::new();
-        c.data_bag.put(Caption { caption: self.caption });
+        let mut c = Component::new(Type::Label);
+        c.data_mut().put(Caption { caption: self.caption });
         c
     }
 }
