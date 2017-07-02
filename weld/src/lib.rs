@@ -1,7 +1,8 @@
+extern crate cassowary;
 extern crate gleam;
 extern crate glutin;
 extern crate webrender;
-extern crate webrender_traits;
+extern crate webrender_api;
 extern crate weld_core;
 
 pub mod window;

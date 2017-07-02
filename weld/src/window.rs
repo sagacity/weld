@@ -1,7 +1,7 @@
 use gleam::gl;
 use glutin;
 use webrender;
-use webrender_traits::*;
+use webrender_api::*;
 use weld_core::component_tree::ComponentTree;
 use theme::Theme;
 
@@ -183,7 +183,7 @@ impl Window for WebrenderWindow {
         let pipeline_id = PipelineId(0, 0);
         let layout_size = LayoutSize::new(self.size.width as f32, self.size.height as f32);
         let mut builder = DisplayListBuilder::new(pipeline_id, layout_size);
-        self.theme.build_display_list(&mut builder, &self.tree);
+        self.theme.build_display_list(&mut builder, &self.tree, &layout_size);
 
         let epoch = Epoch(1);
         let root_background_color = ColorF::new(0.0, 0.3, 0.0, 1.0);
@@ -193,7 +193,7 @@ impl Window for WebrenderWindow {
                              builder.finalize(),
                              true);
 
-        self.api.set_root_pipeline(pipeline_id);
+        //self.api.set_root_pipeline(pipeline_id);
         self.api.generate_frame(None);
     }
 }
