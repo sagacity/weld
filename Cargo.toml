@@ -1,6 +1,7 @@
 [workspace]
 members = [
-    "weld"
+    "./weld",
+    "./weld-core"
 ]
 
 [profile.release]

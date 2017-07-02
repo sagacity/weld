@@ -1,6 +1,6 @@
 use id_tree;
 use id_tree::{NodeId, Tree, TreeBuilder};
-use component::*;
+use components::component::*;
 
 pub struct ComponentTree {
     tree: Tree<Box<Component>>,

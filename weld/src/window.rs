@@ -2,7 +2,7 @@ use gleam::gl;
 use glutin;
 use webrender;
 use webrender_traits::*;
-//use node_tree::NodeTree;
+use weld_core::component_tree::ComponentTree;
 
 struct Notifier {
     window_proxy: glutin::WindowProxy,
@@ -37,7 +37,7 @@ struct WebrenderWindow {
     renderer: webrender::Renderer,
     api: RenderApi,
     size: DeviceUintSize, 
-    //tree: NodeTree,
+    tree: ComponentTree,
 }
 
 impl WindowFactory {
@@ -128,7 +128,7 @@ impl WindowFactory {
             renderer: renderer,
             api: api,
             size: size, 
-            //tree: NodeTree::new(),
+            tree: ComponentTree::new(),
         });
     }
 }
