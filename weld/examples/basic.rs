@@ -1,9 +1,8 @@
 extern crate weld;
 extern crate weld_core;
 
-use weld::window::WindowFactory;
-use weld_core::components::label::LabelBuilder;
-use weld_core::components::panel::PanelBuilder;
+use weld_core::window::WindowFactory;
+use weld_core::components;
 use weld_core::component_tree::ComponentTree;
 
 fn main() {
@@ -11,8 +10,9 @@ fn main() {
 
     window.update_tree(&|| {
         let mut tree = ComponentTree::new();
-        let root = tree.add_node(PanelBuilder::new(), None);
-        tree.add_node(LabelBuilder::new().caption("Child"), Some(&root));
+        let root = tree.add_node(components::SplitterBuilder::new(), None);
+        tree.add_node(components::PanelBuilder::new(), Some(&root));
+        tree.add_node(components::PanelBuilder::new(), Some(&root));
         tree
     });
 

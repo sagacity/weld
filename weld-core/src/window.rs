@@ -2,7 +2,7 @@ use gleam::gl;
 use glutin;
 use webrender;
 use webrender_api::*;
-use weld_core::component_tree::ComponentTree;
+use component_tree::ComponentTree;
 use theme::Theme;
 
 struct Notifier {

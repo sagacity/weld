@@ -3,16 +3,5 @@ name = "weld"
 version = "0.1.0"
 authors = ["Roy Jacobs <hello@royjacobs.org>"]
 
-[dependencies]
-gleam = "0.4.7"
-servo-glutin = "0.11"
-cassowary = "0.2.1"
-
 [dependencies.weld_core]
 path = "../weld-core"
-
-[dependencies.webrender_api]
-git = "https://github.com/servo/webrender"
-
-[dependencies.webrender]
-git = "https://github.com/servo/webrender"

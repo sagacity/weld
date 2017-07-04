@@ -1,18 +1,43 @@
-use webrender_api::*;
-use weld_core::component_tree::ComponentTree;
+use webrender_api::LayoutRect;
+use component_tree::ComponentTree;
+use components::component::{Component, Size};
+use id_tree::{Children, NodeId};
+use std::collections::HashMap;
+use webrender_api::{LayoutSize, LayoutPoint};
+
+pub trait Layout {
+    fn determine_sizes(&self, tree: &ComponentTree, bounds: LayoutRect, result: &mut HashMap<i64, LayoutRect>);
+}
+
+pub struct CassowaryLayout;
+
+impl CassowaryLayout {
+    pub fn new() -> Box<Layout> {
+        Box::new(CassowaryLayout {
+        })
+    }
+}
+
+impl Layout for CassowaryLayout {
+    fn determine_sizes(&self, tree: &ComponentTree, bounds: LayoutRect, result: &mut HashMap<i64, LayoutRect>) {
+        let mut nodes = tree.traverse_post_order();
+        for node in nodes {
+            println!("{:?}: {:?}", node.data().component_type, node.data().size);
+
+            let mut computed_size: LayoutRect = match node.data().size {
+                Size::Relative(percentage_size) => LayoutRect::new(LayoutPoint::new(0.0, 0.0), LayoutSize::new(0.0, 0.0)),
+                Size::Absolute(layout_size) => LayoutRect::new(LayoutPoint::new(0.0, 0.0), LayoutSize::new(0.0, 0.0))
+            };
+            result.insert(node.data().id, computed_size);
+        }
+    }
+}
+
+/*
 use cassowary::{Solver, Variable};
 use cassowary::WeightedRelation::*;
 use cassowary::strength::{WEAK, MEDIUM, STRONG, REQUIRED};
-use std::collections::HashMap;
 
-pub struct Theme;
-
-impl Theme {
-    pub fn new() -> Theme {
-        Theme
-    }
-
-    pub fn build_display_list(&self, builder: &mut DisplayListBuilder, tree: &ComponentTree, size: &LayoutSize) {
         let window_width = Variable::new();
         let window_height = Variable::new();
         let left = Variable::new();
@@ -49,6 +74,4 @@ impl Theme {
         let br = *(values.get(&right).unwrap_or(&0.0_f64)) as f32;
         let bb = *(values.get(&bottom).unwrap_or(&0.0_f64)) as f32;
         let bounds = LayoutRect::new(LayoutPoint::new(bl, bt), LayoutSize::new(br - bl, bb - bt));
-        builder.push_rect(bounds, bounds, ColorF::new(1.0, 1.0, 1.0, 1.0));
-    }
-}
+*/
