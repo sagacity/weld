@@ -1,5 +1,5 @@
 use data_bag::DataBag;
-use webrender_api::{LayoutSize, LayoutPixel, LayoutRect, LayoutPoint};
+use webrender_api::{LayoutSize, LayoutPixel, LayoutRect};
 use euclid::{TypedSize2D, TypedSideOffsets2D};
 
 #[derive(Debug)]
@@ -28,6 +28,10 @@ impl Size {
             Size::Relative(percentage_size) => LayoutRect::new(bounds.origin, LayoutSize::new((percentage_size.width * bounds.size.width) / 100.0, (percentage_size.height * bounds.size.height) / 100.0)),
             Size::Absolute(absolute_size) => LayoutRect::new(bounds.origin, LayoutSize::new(absolute_size.width, absolute_size.height))
         }
+    }
+
+    pub fn hundred_percent() -> Size {
+        Size::Relative(PercentageSize::new(100.0, 100.0))
     }
 }
 

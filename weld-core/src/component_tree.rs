@@ -1,5 +1,5 @@
 use id_tree;
-use id_tree::{Children, Node, NodeId, Tree, TreeBuilder, PreOrderTraversal};
+use id_tree::{NodeId, Tree, TreeBuilder, PreOrderTraversal};
 use components::component::*;
 
 pub struct ComponentTree {

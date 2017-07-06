@@ -2,9 +2,9 @@ use webrender_api::*;
 use component_tree::ComponentTree;
 use components::component::*;
 use components::panel::PanelSize;
-use id_tree;
-use id_tree::{Tree, TreeBuilder, NodeId};
+use id_tree::{Tree, TreeBuilder, NodeId, Node, InsertBehavior};
 use std::collections::HashMap;
+use std::ops::Deref;
 
 pub struct Theme {
 }
@@ -15,9 +15,9 @@ impl Theme {
         }
     }
 
-    pub fn build_display_list(&self, builder: &mut DisplayListBuilder, tree: &ComponentTree, size: &LayoutSize) {
+    pub fn build_display_list(&self, _: &mut DisplayListBuilder, tree: &ComponentTree, size: &LayoutSize) {
         let bounds = LayoutRect::new(LayoutPoint::new(0.0, 0.0), size.clone());
-        let visual_tree = VisualBuilder::new(tree.tree()).traverse(bounds);
+        let visual_tree = VisualBuilder::new(tree.tree()).build_visual_tree(bounds);
 
         for visual_node in visual_tree.traverse_pre_order(visual_tree.root_node_id().unwrap()).unwrap() {
             println!("{:?}", visual_node.data());
@@ -25,8 +25,27 @@ impl Theme {
     }
 }
 
-type VisualNodeId = NodeId;
-type LogicalNodeId = NodeId;
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct VisualNodeId { id: NodeId }
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct LogicalNodeId { id: NodeId }
+
+impl Deref for VisualNodeId {
+    type Target = NodeId;
+
+    fn deref(&self) -> &NodeId {
+        &self.id
+    }
+}
+
+impl Deref for LogicalNodeId {
+    type Target = NodeId;
+
+    fn deref(&self) -> &NodeId {
+        &self.id
+    }
+}
 
 #[derive(Debug)]
 struct Visual {
@@ -48,73 +67,67 @@ impl<'a> VisualBuilder<'a> {
         }
     }
 
-    fn traverse(mut self, bounds: LayoutRect) -> Tree<Visual> {
-        let visual_root_id = self.visual_tree.insert(id_tree::Node::new(Visual { rect: bounds }), id_tree::InsertBehavior::AsRoot).unwrap();
-        self.traverse_node(&visual_root_id, self.logical_tree.root_node_id().unwrap(), bounds);
+    fn build_visual_tree(mut self, bounds: LayoutRect) -> Tree<Visual> {
+        let visual_root_id = VisualNodeId { id: self.visual_tree.insert(Node::new(Visual { rect: bounds }), InsertBehavior::AsRoot).unwrap() };
+        let logical_root_id = LogicalNodeId { id: self.logical_tree.root_node_id().unwrap().clone() };
+        self.set_visual_parent(&logical_root_id, &visual_root_id);
+
+        self.traverse_node(&logical_root_id, bounds);
+
         self.visual_tree
     }
 
-    fn traverse_node(&mut self, visual_parent_id: &VisualNodeId, node_id: &LogicalNodeId, bounds: LayoutRect) {
-        use id_tree::InsertBehavior::*;
-
+    fn traverse_node(&mut self, node_id: &LogicalNodeId, bounds: LayoutRect) {
         let node = self.logical_tree.get(node_id).unwrap();
         let component = node.data();
 
-        let mut visual_node_id = None;
         let rect = component.size.as_layout_rect(&bounds);
 
+        // The current logical node will already have a visual parent registered, so find it and use it as the tree inserter
+        let visual_parent_id;
+        let visual_parent_inserter = match self.get_visual_parent(node_id) {
+            Some(vpi) => {
+                visual_parent_id = vpi.clone();
+                InsertBehavior::UnderNode(&visual_parent_id)
+            },
+            None => panic!("There is no visual parent available for node {:?}", node_id)
+        };
+
+        // Insert the main visual node
+        let visual_node_id = self.visual_tree.insert(Node::new(Visual {
+            rect: rect
+        }), visual_parent_inserter).unwrap();
+
+        // Insert additional nodes, if needed
         match component.component_type {
             Type::Splitter => {
-                // Add the main splitter visual
-                let splitter_id = self.visual_tree.insert(id_tree::Node::new(Visual {
-                    rect: rect
-                }), UnderNode(visual_parent_id)).unwrap();
-                println!("Adding splitter");
-
                 // Add a splitter pane for every child
                 for child_node_id in node.children() {
-                    println!("Adding child");
                     let child_component = self.logical_tree.get(&child_node_id).unwrap().data();
-                    let visual_child_node_id = self.visual_tree.insert(id_tree::Node::new(Visual {
-                        rect: child_component.data().get::<PanelSize>().unwrap_or(&PanelSize { size: Size::Relative(PercentageSize::new(100.0, 100.0)) }).size.as_layout_rect(&bounds)
-                    }), UnderNode(&splitter_id)).unwrap();
+                    let visual_child_node_id = VisualNodeId {
+                        id: self.visual_tree.insert(Node::new(Visual {
+                            rect: child_component.data().get::<PanelSize>().unwrap_or(&PanelSize { size: Size::Relative(PercentageSize::new(100.0, 100.0)) }).size.as_layout_rect(&bounds)
+                        }), InsertBehavior::UnderNode(&visual_node_id)).unwrap()
+                    };
 
-                    self.set_visual_parent(child_node_id, visual_child_node_id);
-
-                    println!("Child: {:?}", child_node_id.clone());
+                    self.set_visual_parent(&LogicalNodeId { id: child_node_id.clone() }, &visual_child_node_id);
                 }
-
-                visual_node_id = Some(splitter_id);
             },
-
-            Type::Panel => {
-                println!("Adding panel");
-                println!("Parent: {:?}", node.parent().unwrap());
-                let visual_parent_node_id = self.get_visual_parent(node_id); // handle case where there is no visual parent
-                let panel_id = self.visual_tree.insert(id_tree::Node::new(Visual {
-                    rect: rect
-                }), id_tree::InsertBehavior::UnderNode(&visual_parent_node_id)).unwrap();
-            }
 
             _ => {}
         }
 
-        match visual_node_id {
-            Some(p) => {
-                for child in node.children() {
-                    self.traverse_node(&p, child, rect);
-                }
-            },
-            None => {}
+        for child_node_id in node.children() {
+            self.traverse_node(&LogicalNodeId { id: child_node_id.clone() }, rect);
         }
     }
 
-    fn set_visual_parent(&mut self, logical_node_id: &LogicalNodeId, visual_parent_id: VisualNodeId) {
-        self.visual_parent_map.insert(logical_node_id.clone(), visual_parent_id);
+    fn set_visual_parent(&mut self, logical_node_id: &LogicalNodeId, visual_parent_id: &VisualNodeId) {
+        self.visual_parent_map.insert(logical_node_id.clone(), visual_parent_id.clone());
     }
 
-    fn get_visual_parent(&self, logical_node_id: &LogicalNodeId) -> VisualNodeId {
-        self.visual_parent_map.get(logical_node_id).unwrap().clone()
+    fn get_visual_parent(&self, logical_node_id: &LogicalNodeId) -> Option<&VisualNodeId> {
+        self.visual_parent_map.get(logical_node_id)
     }
 }
 
@@ -139,7 +152,7 @@ mod tests {
         tree.add_node(panel2, Some(&root));
 
         let bounds = LayoutRect::new(LayoutPoint::new(0.0, 0.0), LayoutSize::new(1000.0, 1000.0));
-        let visual_tree = VisualBuilder::new(tree.tree()).traverse(bounds);
+        let visual_tree = VisualBuilder::new(tree.tree()).build_visual_tree(bounds);
 
         let sizes: Vec<LayoutSize> = visual_tree.traverse_pre_order(visual_tree.root_node_id().unwrap())
             .unwrap()
