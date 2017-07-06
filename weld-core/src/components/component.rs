@@ -1,5 +1,5 @@
 use data_bag::DataBag;
-use webrender_api::{LayoutSize, LayoutPixel};
+use webrender_api::{LayoutSize, LayoutPixel, LayoutRect, LayoutPoint};
 use euclid::{TypedSize2D, TypedSideOffsets2D};
 
 #[derive(Debug)]
@@ -22,6 +22,15 @@ pub enum Size {
     Absolute(LayoutSize)
 }
 
+impl Size {
+    pub fn as_layout_rect(&self, bounds: &LayoutRect) -> LayoutRect {
+        match *self {
+            Size::Relative(percentage_size) => LayoutRect::new(bounds.origin, LayoutSize::new((percentage_size.width * bounds.size.width) / 100.0, (percentage_size.height * bounds.size.height) / 100.0)),
+            Size::Absolute(absolute_size) => LayoutRect::new(bounds.origin, LayoutSize::new(absolute_size.width, absolute_size.height))
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Padding {
     Relative(PercentageSideOffsets),
@@ -29,24 +38,15 @@ pub enum Padding {
 }
 
 pub struct Component {
-    pub id: i64,
     pub component_type: Type,
     pub size: Size,
     pub padding: Padding,
     data_bag: DataBag,
 }
 
-static mut COMPONENT_ID: i64 = 0;
-
 impl Component {
     pub ( crate ) fn new(t: Type) -> Component {
-        let id: i64;
-        unsafe {
-            COMPONENT_ID = COMPONENT_ID + 1;
-            id = COMPONENT_ID;
-        }
         Component {
-            id: id,
             component_type: t,
             size: Size::Relative(PercentageSize::new(100.0, 100.0)),
             padding: Padding::Absolute(LayoutSideOffsets::new_all_same(0.0)),

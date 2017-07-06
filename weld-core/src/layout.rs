@@ -20,7 +20,7 @@ impl CassowaryLayout {
 
 impl Layout for CassowaryLayout {
     fn determine_sizes(&self, tree: &ComponentTree, bounds: LayoutRect, result: &mut HashMap<i64, LayoutRect>) {
-        let mut nodes = tree.traverse_post_order();
+        /*let mut nodes = tree.traverse_post_order();
         for node in nodes {
             println!("{:?}: {:?}", node.data().component_type, node.data().size);
 
@@ -29,7 +29,7 @@ impl Layout for CassowaryLayout {
                 Size::Absolute(layout_size) => LayoutRect::new(LayoutPoint::new(0.0, 0.0), LayoutSize::new(0.0, 0.0))
             };
             result.insert(node.data().id, computed_size);
-        }
+        }*/
     }
 }
 

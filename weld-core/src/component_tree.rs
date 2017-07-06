@@ -1,5 +1,5 @@
 use id_tree;
-use id_tree::{Children, NodeId, Tree, TreeBuilder, PostOrderTraversal};
+use id_tree::{Children, Node, NodeId, Tree, TreeBuilder, PreOrderTraversal};
 use components::component::*;
 
 pub struct ComponentTree {
@@ -36,8 +36,12 @@ impl ComponentTree {
         self.tree.get(id).unwrap().data().as_ref()
     }
 
-    pub fn traverse_post_order(&self) -> PostOrderTraversal<Box<Component>> {
-        self.tree.traverse_post_order(self.tree.root_node_id().unwrap()).unwrap()
+    pub fn traverse_pre_order(&self) -> PreOrderTraversal<Box<Component>> {
+        self.tree.traverse_pre_order(self.tree.root_node_id().unwrap()).unwrap()
+    }
+
+    pub fn tree(&self) -> &Tree<Box<Component>> {
+        &self.tree
     }
 }
 /*

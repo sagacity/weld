@@ -3,9 +3,13 @@ use components::component::*;
 pub struct PanelBuilder {
 }
 
+pub struct PanelSize {
+    pub size: Size
+}
+
 impl PanelBuilder {
     pub fn new() -> Self {
-        Self { }
+        Self {}
     }
 }
 
