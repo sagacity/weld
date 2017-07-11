@@ -88,7 +88,7 @@ impl WindowFactory {
         let notifier = Box::new(Notifier::new(window.create_window_proxy()));
         renderer.set_render_notifier(notifier);
 
-        let epoch = Epoch(0);
+        /*let epoch = Epoch(0);
         let root_background_color = ColorF::new(0.3, 0.0, 0.0, 1.0);
 
         let pipeline_id = PipelineId(0, 0);
@@ -124,7 +124,7 @@ impl WindowFactory {
                              builder.finalize(),
                              true);
         api.set_root_pipeline(pipeline_id);
-        api.generate_frame(None);
+        api.generate_frame(None);*/
 
         return Box::new(WebrenderWindow {
             window: window,

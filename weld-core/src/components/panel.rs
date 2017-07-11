@@ -1,10 +1,11 @@
 use components::component::*;
+use yoga::StyleUnit;
 
 pub struct PanelBuilder {
 }
 
 pub struct PanelSize {
-    pub size: Size
+    pub size: (StyleUnit, StyleUnit),
 }
 
 impl PanelBuilder {
