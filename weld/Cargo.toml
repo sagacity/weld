@@ -5,3 +5,6 @@ authors = ["Roy Jacobs <hello@royjacobs.org>"]
 
 [dependencies.weld_core]
 path = "../weld-core"
+
+[dependencies.yoga]
+git = "https://github.com/bschwind/yoga-rs"

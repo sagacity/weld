@@ -6,6 +6,7 @@ extern crate glutin;
 extern crate snowflake;
 extern crate webrender;
 extern crate webrender_api;
+extern crate rand;
 
 pub mod components;
 

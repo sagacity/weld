@@ -17,11 +17,11 @@ pub struct Component {
 }
 
 impl Component {
-    pub ( crate ) fn new(t: Type) -> Component {
+    pub ( crate ) fn new(t: Type, styles: Vec<yoga::FlexStyle>) -> Component {
         Component {
             id: ProcessUniqueId::new(),
             component_type: t,
-            styles: Vec::new(),
+            styles: styles,
             data_bag: DataBag::new()
         }
     }

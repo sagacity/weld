@@ -28,6 +28,7 @@ impl RenderNotifier for Notifier {
 }
 
 pub trait Window {
+    fn size(&self) -> &DeviceUintSize;
     fn run(&mut self);
     fn update_tree(&mut self, tree_builder: &Fn() -> ComponentTree);
 }
@@ -68,7 +69,7 @@ impl WindowFactory {
             },
         };
 
-        println!("OpenGL version {}", gl.get_string(gl::VERSION));
+        //println!("OpenGL version {}", gl.get_string(gl::VERSION));
         //println!("Shader resource path: {:?}", res_path);
 
         let (width, height) = window.get_inner_size_pixels().unwrap();
@@ -88,44 +89,6 @@ impl WindowFactory {
         let notifier = Box::new(Notifier::new(window.create_window_proxy()));
         renderer.set_render_notifier(notifier);
 
-        /*let epoch = Epoch(0);
-        let root_background_color = ColorF::new(0.3, 0.0, 0.0, 1.0);
-
-        let pipeline_id = PipelineId(0, 0);
-        let layout_size = LayoutSize::new(width as f32, height as f32);
-        let mut builder = DisplayListBuilder::new(pipeline_id, layout_size);
-
-        let stacking_bounds = LayoutRect::new(LayoutPoint::new(0.0, 0.0),
-                                              LayoutSize::new(250.0, 250.0));
-        builder.push_stacking_context(ScrollPolicy::Scrollable,
-                                      stacking_bounds,
-                                      None,
-                                      TransformStyle::Flat,
-                                      None,
-                                      MixBlendMode::Normal,
-                                      Vec::new());
-
-        let bounds = LayoutRect::new(LayoutPoint::new(50.0, 50.0), LayoutSize::new(100.0, 100.0));
-        builder.push_rect(bounds, bounds, ColorF::new(1.0, 1.0, 1.0, 1.0));
-        builder.push_box_shadow(bounds,
-                                stacking_bounds,
-                                bounds,
-                                LayoutVector2D::new(5.0, 5.0),
-                                ColorF::new(0.5, 0.5, 0.5, 0.5),
-                                2.0,
-                                2.0,
-                                2.0,
-                                BoxShadowClipMode::None);
-        builder.pop_stacking_context();
-
-        api.set_display_list(Some(root_background_color),
-                             epoch,
-                             LayoutSize::new(width as f32, height as f32),
-                             builder.finalize(),
-                             true);
-        api.set_root_pipeline(pipeline_id);
-        api.generate_frame(None);*/
-
         return Box::new(WebrenderWindow {
             window: window,
             renderer: renderer,
@@ -138,6 +101,10 @@ impl WindowFactory {
 }
 
 impl Window for WebrenderWindow {
+    fn size(&self) -> &DeviceUintSize {
+        &self.size
+    }
+
     fn run(&mut self) {
         'outer: for event in self.window.wait_events() {
             let mut events = Vec::new();
@@ -181,11 +148,13 @@ impl Window for WebrenderWindow {
         self.tree = tree_builder();
 
         let pipeline_id = PipelineId(0, 0);
+        self.api.set_root_pipeline(pipeline_id);
+
         let layout_size = LayoutSize::new(self.size.width as f32, self.size.height as f32);
         let mut builder = DisplayListBuilder::new(pipeline_id, layout_size);
         self.theme.build_display_list(&mut builder, &self.tree, &layout_size);
 
-        let epoch = Epoch(1);
+        let epoch = Epoch(0);
         let root_background_color = ColorF::new(0.0, 0.3, 0.0, 1.0);
         self.api.set_display_list(Some(root_background_color),
                              epoch,
@@ -193,7 +162,6 @@ impl Window for WebrenderWindow {
                              builder.finalize(),
                              true);
 
-        //self.api.set_root_pipeline(pipeline_id);
         self.api.generate_frame(None);
     }
 }

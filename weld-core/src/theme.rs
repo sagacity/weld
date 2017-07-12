@@ -3,7 +3,6 @@ use component_tree::ComponentTree;
 use components::component::*;
 use id_tree::{Tree, TreeBuilder, NodeId, Node, InsertBehavior};
 use std::collections::HashMap;
-use std::ops::Deref;
 use yoga::Node as YogaNode;
 use yoga::Direction;
 use snowflake::ProcessUniqueId;
@@ -15,18 +14,51 @@ impl Theme {
         Theme {}
     }
 
-    pub fn build_display_list(&self, _: &mut DisplayListBuilder, tree: &ComponentTree, size: &LayoutSize) {
-        let bounds = LayoutRect::new(LayoutPoint::new(0.0, 0.0), size.clone());
-        let visual_tree = VisualBuilder::new(tree.tree()).build_visual_tree();
+    pub fn build_display_list(&self, builder: &mut DisplayListBuilder, tree: &ComponentTree, size: &LayoutSize) {
+        let mut visual_tree = VisualBuilder::new(tree.tree()).build_visual_tree();
+        visual_tree.calculate_layout(size.width, size.height);
 
-        for visual_node in visual_tree.traverse_pre_order(visual_tree.root_node_id().unwrap()).unwrap() {
+        self.build_node(builder, &visual_tree, visual_tree.tree().root_node_id().unwrap());
+
+        /*for visual_node in visual_tree.traverse_pre_order(visual_tree.root_node_id().unwrap()).unwrap() {
             //println!("{:?}", visual_node.data());
+        }*/
+    }
+
+    fn build_node(&self, builder: &mut DisplayListBuilder, visual_tree: &VisualTree, node_id: &NodeId) {
+        use rand::{random, Closed01};
+
+        let node = visual_tree.tree().get(node_id).unwrap();
+        let yoga = &node.data().yoga;
+
+        let color = ColorF::new(random::<Closed01<f32>>().0, random::<Closed01<f32>>().0, random::<Closed01<f32>>().0, 1.0);
+        let bounds = LayoutRect::new(LayoutPoint::new(yoga.get_layout().left, yoga.get_layout().top), LayoutSize::new(yoga.get_layout().width, yoga.get_layout().height));
+        println!("bounds: {:?}", bounds);
+        builder.push_rect(bounds, None, color);
+
+        for child_id in node.children() {
+            self.build_node(builder, visual_tree, child_id);
         }
     }
 }
 
 struct Visual {
     yoga: YogaNode
+}
+
+struct VisualTree {
+    visual_tree: Tree<Visual>
+}
+
+impl VisualTree {
+    pub fn tree(&self) -> &Tree<Visual> {
+        &self.visual_tree
+    }
+
+    pub fn calculate_layout(&mut self, width: f32, height: f32) {
+        let root = self.visual_tree.root_node_id().unwrap().clone();
+        self.visual_tree.get_mut(&root).unwrap().data_mut().yoga.calculate_layout(width, height, Direction::LTR);
+    }
 }
 
 struct VisualBuilder<'a> {
@@ -44,18 +76,18 @@ impl<'a> VisualBuilder<'a> {
         }
     }
 
-    fn build_visual_tree(mut self) -> Tree<Visual> {
+    fn build_visual_tree(mut self) -> VisualTree {
         self.add_node(self.logical_tree.root_node_id().unwrap());
 
-        let root = self.visual_tree.root_node_id().unwrap().clone();
-        self.visual_tree.get_mut(&root).unwrap().data_mut().yoga.calculate_layout(1000.0, 1000.0, Direction::LTR);
-
-        self.visual_tree
+        VisualTree {
+            visual_tree: self.visual_tree
+        }
     }
 
     fn add_node(&mut self, logical_node_id: &NodeId) {
         let node = self.logical_tree.get(logical_node_id).unwrap();
         println!("Adding {:?}", node.data().component_type);
+        println!("Styles {:?}", node.data().styles);
 
         let mut yoga = YogaNode::new();
         yoga.apply_styles(&node.data().styles);
@@ -79,21 +111,24 @@ impl<'a> VisualBuilder<'a> {
         }
     }
 
-    fn insert_visual_node(&mut self, logical_node: &Node<Box<Component>>, mut visual_node: Node<Visual>, visual_parent_id: Option<NodeId>) {
+    fn insert_visual_node(&mut self, logical_node: &Node<Box<Component>>, mut visual_node: Node<Visual>, visual_parent_id: Option<NodeId>) -> NodeId {
         // The new node has a visual parent, so attach the YogaNode to the parent YogaNode as well
         if let Some(ref vpi) = visual_parent_id {
             let mut visual = visual_node.data_mut();
             let mut parent_yoga = &mut self.visual_tree.get_mut(&vpi).unwrap().data_mut().yoga;
             let child_count = parent_yoga.child_count();
             parent_yoga.insert_child(&mut visual.yoga, child_count);
+            println!("Inserted into parent yoga at pos {:?}", child_count);
         }
 
         let insert_behavior = match visual_parent_id {
             Some(ref vpi) => InsertBehavior::UnderNode(&vpi),
             None => InsertBehavior::AsRoot
         };
-        let visual_node_id = Some(self.visual_tree.insert(visual_node, insert_behavior).unwrap());
-        self.node_to_visual_map.insert(logical_node.data().id, visual_node_id.unwrap());
+        let visual_node_id = self.visual_tree.insert(visual_node, insert_behavior).unwrap();
+        self.node_to_visual_map.insert(logical_node.data().id, visual_node_id.clone());
+
+        visual_node_id
     }
 }
 
@@ -103,50 +138,42 @@ mod tests {
     use components;
     use components::panel::PanelSize;
     use component_tree::ComponentTree;
-    use yoga::{Direction, Layout, Percent, FlexStyle};
+    use yoga::{Direction, Layout, Percent, Point, FlexStyle, FlexDirection};
 
     #[test]
     fn test_splitter() {
         let mut tree = ComponentTree::new();
-        let root = tree.add_node(components::SplitterBuilder::new(), None);
+        let mut splitter: Component = components::SplitterBuilder::new(vec![
+            FlexStyle::Width(1000.point()),
+            FlexStyle::Height(1000.point()),
+            FlexStyle::FlexDirection(FlexDirection::Row)
+        ]).into();
+        let root = tree.add_node(splitter, None);
 
-        let mut panel1: Component = components::PanelBuilder::new().into();
-        //panel1.data_mut().put(PanelSize { size: (30.percent(), 100.percent()) });
-        panel1.styles = vec![
+        let mut panel1: Component = components::PanelBuilder::new(vec![
             FlexStyle::Width(30.percent()),
             FlexStyle::Height(100.percent())
-        ];
+        ]).into();
         tree.add_node(panel1, Some(&root));
 
-        let mut panel2: Component = components::PanelBuilder::new().into();
-        //panel2.data_mut().put(PanelSize { size: (70.percent(), 100.percent()) });
-        panel2.styles = vec![
+        let mut panel2: Component = components::PanelBuilder::new(vec![
             FlexStyle::Width(70.percent()),
             FlexStyle::Height(100.percent())
-        ];
+        ]).into();
         tree.add_node(panel2, Some(&root));
 
-        let visual_tree = VisualBuilder::new(tree.tree()).build_visual_tree();
+        let mut visual_tree = VisualBuilder::new(tree.tree()).build_visual_tree();
+        visual_tree.calculate_layout(1000.0, 1000.0);
 
-        let sizes: Vec<Layout> = visual_tree.traverse_pre_order(visual_tree.root_node_id().unwrap())
+        let sizes: Vec<Layout> = visual_tree.tree().traverse_pre_order(visual_tree.tree().root_node_id().unwrap())
             .unwrap()
             .map(|node| node.data().yoga.get_layout())
             .collect();
-        println!("{:?}", sizes);
-
-        /*let bounds = LayoutRect::new(LayoutPoint::new(0.0, 0.0), LayoutSize::new(1000.0, 1000.0));
-        let sizes: Vec<LayoutSize> = visual_tree.traverse_pre_order(visual_tree.root_node_id().unwrap())
-            .unwrap()
-            .map(|node| node.data().rect.as_layout_rect(&bounds).size)
-            .collect();
 
         assert_eq!(sizes, vec![
-            LayoutSize::new(1000.0, 1000.0), // root
-            LayoutSize::new(1000.0, 1000.0),
-            LayoutSize::new(300.0, 1000.0),
-            LayoutSize::new(1000.0, 1000.0),
-            LayoutSize::new(700.0, 1000.0),
-            LayoutSize::new(1000.0, 1000.0)
-        ]);*/
+            Layout { left:   0.0, right:    0.0, top: 0.0, bottom: 0.0, width: 1000.0, height: 1000.0 },
+            Layout { left:   0.0, right:    0.0, top: 0.0, bottom: 0.0, width:  300.0, height: 1000.0 },
+            Layout { left: 300.0, right:    0.0, top: 0.0, bottom: 0.0, width:  700.0, height: 1000.0 },
+        ]);
     }
 }
