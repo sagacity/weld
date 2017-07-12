@@ -28,8 +28,13 @@ impl Theme {
         let yoga = &node.data().yoga;
 
         let color = ColorF::new(random::<Closed01<f32>>().0, random::<Closed01<f32>>().0, random::<Closed01<f32>>().0, 1.0);
-        let bounds = LayoutRect::new(LayoutPoint::new(yoga.get_layout().left, yoga.get_layout().top), LayoutSize::new(yoga.get_layout().width, yoga.get_layout().height));
+        let bounds = LayoutRect::new(
+            LayoutPoint::new(yoga.get_layout().left, yoga.get_layout().top),
+            LayoutSize::new(yoga.get_layout().width, yoga.get_layout().height)
+        );
+        println!("layout: {:?}", yoga.get_layout());
         println!("bounds: {:?}", bounds);
+
         builder.push_rect(bounds, None, color);
 
         for child_id in node.children() {

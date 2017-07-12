@@ -19,17 +19,18 @@ fn main() {
         let root = tree.add_node(SplitterBuilder::new(vec![
             Width(width.point()),
             Height(height.point()),
-            FlexDirection(FlexDirection::Row)
+            FlexDirection(FlexDirection::Row),
+            Padding(25.point())
         ]), None);
 
         tree.add_node(PanelBuilder::new(vec![
             Width(30.percent()),
-            Height(100.percent())
+            Height(100.percent()),
         ]), Some(&root));
 
         tree.add_node(PanelBuilder::new(vec![
-            Width(70.percent()),
-            Height(100.percent())
+            Flex(1.0),
+            Margin(20.point())
         ]), Some(&root));
 
         tree
