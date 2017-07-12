@@ -19,10 +19,6 @@ impl Theme {
         visual_tree.calculate_layout(size.width, size.height);
 
         self.build_node(builder, &visual_tree, visual_tree.tree().root_node_id().unwrap());
-
-        /*for visual_node in visual_tree.traverse_pre_order(visual_tree.root_node_id().unwrap()).unwrap() {
-            //println!("{:?}", visual_node.data());
-        }*/
     }
 
     fn build_node(&self, builder: &mut DisplayListBuilder, visual_tree: &VisualTree, node_id: &NodeId) {

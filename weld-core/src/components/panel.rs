@@ -1,12 +1,8 @@
 use components::component::*;
-use yoga::{FlexStyle, StyleUnit};
+use yoga::FlexStyle;
 
 pub struct PanelBuilder {
     styles: Vec<FlexStyle>
-}
-
-pub struct PanelSize {
-    pub size: (StyleUnit, StyleUnit),
 }
 
 impl PanelBuilder {
