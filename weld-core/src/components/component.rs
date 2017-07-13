@@ -6,7 +6,8 @@ use yoga;
 pub enum Type {
     Panel,
     Label,
-    Splitter
+    Splitter,
+    Button
 }
 
 pub struct Component {

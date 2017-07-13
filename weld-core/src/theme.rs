@@ -7,18 +7,24 @@ use yoga::Node as YogaNode;
 use yoga::Direction;
 use snowflake::ProcessUniqueId;
 
-pub struct Theme {}
+pub struct Theme {
+    visual_tree: Option<Tree<Visual>>
+}
 
 impl Theme {
     pub fn new() -> Theme {
-        Theme {}
+        Theme {
+            visual_tree: None
+        }
     }
 
-    pub fn build_display_list(&self, builder: &mut DisplayListBuilder, tree: &ComponentTree, size: &LayoutSize) {
+    pub fn build_display_list(&mut self, builder: &mut DisplayListBuilder, tree: &ComponentTree, size: &LayoutSize) {
         let mut visual_tree = VisualBuilder::new(tree.tree()).build_visual_tree();
         visual_tree.calculate_layout(size.width, size.height);
 
         self.build_node(builder, &visual_tree, visual_tree.tree().root_node_id().unwrap());
+
+        self.visual_tree = Some(visual_tree.visual_tree)
     }
 
     fn build_node(&self, builder: &mut DisplayListBuilder, visual_tree: &VisualTree, node_id: &NodeId) {
@@ -41,13 +47,29 @@ impl Theme {
             self.build_node(builder, visual_tree, child_id);
         }
     }
+
+    pub fn find_visual_at(&self, point: WorldPoint) {
+        println!("Clicked at: {:?}", point);
+        let tree = self.visual_tree.as_ref().unwrap();
+        for node in tree.traverse_post_order(tree.root_node_id().unwrap()).unwrap() {
+            let data = node.data();
+            let layout = &data.yoga.get_layout();
+            if
+                (point.x >= layout.left) && (point.x <= layout.left + layout.width) &&
+                    (point.y >= layout.top) && (point.y <= layout.top + layout.height)
+                {
+                    println!("yay");
+                    break;
+                }
+        }
+    }
 }
 
-struct Visual {
+pub struct Visual {
     yoga: YogaNode
 }
 
-struct VisualTree {
+pub struct VisualTree {
     visual_tree: Tree<Visual>
 }
 
@@ -172,9 +194,9 @@ mod tests {
             .collect();
 
         assert_eq!(sizes, vec![
-            Layout { left:   0.0, right:    0.0, top: 0.0, bottom: 0.0, width: 1000.0, height: 1000.0 },
-            Layout { left:   0.0, right:    0.0, top: 0.0, bottom: 0.0, width:  300.0, height: 1000.0 },
-            Layout { left: 300.0, right:    0.0, top: 0.0, bottom: 0.0, width:  700.0, height: 1000.0 },
+            Layout { left: 0.0, right: 0.0, top: 0.0, bottom: 0.0, width: 1000.0, height: 1000.0 },
+            Layout { left: 0.0, right: 0.0, top: 0.0, bottom: 0.0, width: 300.0, height: 1000.0 },
+            Layout { left: 300.0, right: 0.0, top: 0.0, bottom: 0.0, width: 700.0, height: 1000.0 },
         ]);
     }
 }

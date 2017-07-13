@@ -43,7 +43,7 @@ struct WebrenderWindow {
 
 struct TreeBuilderContext<'a> {
     size: DeviceUintSize,
-    theme: &'a Theme,
+    theme: &'a mut Theme,
     api: &'a RenderApi,
     epoch: &'a Epoch,
 }
@@ -104,10 +104,12 @@ impl Window for WebrenderWindow {
         let notifier = Box::new(Notifier::new(events_loop.create_proxy()));
         renderer.set_render_notifier(notifier);
 
-        let theme = Theme::new();
+        let mut theme = Theme::new();
         let mut epoch = Epoch(0);
         let mut dirty = true;
         let mut busy_rendering = AtomicBool::new(false);
+
+        let mut mouse = WorldPoint::zero();
 
         events_loop.run_forever(|event| {
             let size = gl_window.get_inner_size_pixels().unwrap();
@@ -124,7 +126,13 @@ impl Window for WebrenderWindow {
                     glutin::WindowEvent::Resized(w, h) => {
                         gl_window.resize(w, h);
                         dirty = true;
+                    },
+                    glutin::WindowEvent::MouseMoved { position: (x, y), .. } => {
+                        mouse = WorldPoint::new(x as f32, y as f32);
                     }
+                    glutin::WindowEvent::MouseInput { button: glutin::MouseButton::Left, .. } => {
+                        theme.find_visual_at(mouse);
+                    },
                     _ => (),
                 },
                 _ => ()
@@ -137,7 +145,7 @@ impl Window for WebrenderWindow {
 
                     self.build_tree(TreeBuilderContext {
                         size: DeviceUintSize::new(size.0, size.1),
-                        theme: &theme,
+                        theme: &mut theme,
                         api: &api,
                         epoch: &epoch
                     });
