@@ -108,21 +108,22 @@ impl Window for WebrenderWindow {
         let mut epoch = Epoch(0);
         let mut dirty = true;
         let mut busy_rendering = AtomicBool::new(false);
-        let mut foo = true;
 
         events_loop.run_forever(|event| {
+            let size = gl_window.get_inner_size_pixels().unwrap();
             match event {
                 glutin::Event::Awakened => {
                     println!("Awakened");
+                    renderer.update();
+                    renderer.render(DeviceUintSize::new(size.0, size.1));
                     let _ = gl_window.swap_buffers().unwrap();
                     *busy_rendering.get_mut() = false;
-                },
+                }
                 glutin::Event::WindowEvent { event, .. } => match event {
                     glutin::WindowEvent::Closed => return glutin::ControlFlow::Break,
                     glutin::WindowEvent::Resized(w, h) => {
                         gl_window.resize(w, h);
                         dirty = true;
-                        foo = true;
                     }
                     _ => (),
                 },
@@ -134,17 +135,6 @@ impl Window for WebrenderWindow {
                     println!("Was not busy rendering, so starting now...");
                     dirty = false;
 
-                    // Stupid workaround to render the first frame twice
-                    if foo {
-                        foo = false;
-                        dirty = true;
-                    }
-
-                    let size = gl_window.get_inner_size_pixels().unwrap();
-                    println!("Rendering size: {:?}", size);
-
-                    renderer.update();
-
                     self.build_tree(TreeBuilderContext {
                         size: DeviceUintSize::new(size.0, size.1),
                         theme: &theme,
@@ -152,8 +142,6 @@ impl Window for WebrenderWindow {
                         epoch: &epoch
                     });
                     epoch.0 = epoch.0 + 1;
-
-                    renderer.render(DeviceUintSize::new(size.0, size.1));
                 }
             }
 
@@ -175,11 +163,10 @@ impl WebrenderWindow {
         let root_background_color = ColorF::new(0.0, 0.7, 0.0, 1.0);
         context.api.set_window_parameters(context.size, DeviceUintRect::new(DeviceUintPoint::zero(), context.size));
         context.api.set_display_list(Some(root_background_color),
-                                  *context.epoch,
-                                  layout_size,
-                                  builder.finalize(),
-                                  true);
-
+                                     *context.epoch,
+                                     layout_size,
+                                     builder.finalize(),
+                                     true);
         context.api.generate_frame(None);
     }
 }
