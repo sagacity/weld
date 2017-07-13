@@ -6,7 +6,7 @@ authors = ["Roy Jacobs <roy.jacobs@gmail.com>"]
 [dependencies]
 id_tree = "1.1.2"
 gleam = "0.4.7"
-servo-glutin = "0.11"
+glutin = "0.9.0"
 euclid = "0.15.1"
 snowflake = "1.2"
 rand = "0.3"
