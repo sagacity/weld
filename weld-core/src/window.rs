@@ -1,7 +1,7 @@
 use gleam::gl;
 use glutin;
 use webrender;
-use webrender_api::*;
+use webrender::api::*;
 use component_tree::ComponentTree;
 use theme::Theme;
 

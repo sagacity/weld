@@ -1,4 +1,4 @@
-use webrender_api::*;
+use webrender::api::*;
 use component_tree::ComponentTree;
 use components::component::*;
 use id_tree::{Tree, TreeBuilder, NodeId, Node, InsertBehavior};

@@ -1,12 +1,11 @@
 extern crate weld;
 extern crate weld_core;
-extern crate yoga;
 
 use weld_core::window::WindowFactory;
 use weld_core::components::*;
 use weld_core::component_tree::ComponentTree;
-use yoga::{FlexDirection, Percent, Point};
-use yoga::FlexStyle::*;
+use weld_core::layout::{FlexDirection, Percent, Point};
+use weld_core::layout::FlexStyle::*;
 
 fn main() {
     let mut window = WindowFactory::new("Demo");
