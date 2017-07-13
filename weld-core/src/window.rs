@@ -41,7 +41,8 @@ struct WebrenderWindow {
     api: RenderApi,
     size: DeviceUintSize, 
     tree: ComponentTree,
-    theme: Theme
+    theme: Theme,
+    epoch: u32
 }
 
 impl WindowFactory {
@@ -86,6 +87,8 @@ impl WindowFactory {
         let (renderer, sender) = webrender::renderer::Renderer::new(gl, opts, size).unwrap();
         let api = sender.create_api();
 
+        api.set_root_pipeline(PipelineId(0, 0));
+
         let notifier = Box::new(Notifier::new(window.create_window_proxy()));
         renderer.set_render_notifier(notifier);
 
@@ -95,7 +98,8 @@ impl WindowFactory {
             api: api,
             size: size, 
             tree: ComponentTree::new(),
-            theme: Theme::new()
+            theme: Theme::new(),
+            epoch: 0
         });
     }
 }
@@ -106,9 +110,9 @@ impl Window for WebrenderWindow {
     }
 
     fn run(&mut self) {
-        'outer: for event in self.window.wait_events() {
-            let mut events = Vec::new();
-            events.push(event);
+        'outer: loop {
+            let mut events: Vec<glutin::Event> = Vec::new();
+            events.push(self.window.wait_events().next().unwrap());
 
             for event in self.window.poll_events() {
                 events.push(event);
@@ -124,6 +128,7 @@ impl Window for WebrenderWindow {
 
                     glutin::Event::Resized(width, height) => {
                         self.size = DeviceUintSize::new(width, height);
+                        self.build_tree();
                     }
 
                     glutin::Event::KeyboardInput(glutin::ElementState::Pressed,
@@ -146,16 +151,20 @@ impl Window for WebrenderWindow {
 
     fn update_tree(&mut self, tree_builder: &Fn() -> ComponentTree) {
         self.tree = tree_builder();
+        self.build_tree();
+    }
+}
 
-        let pipeline_id = PipelineId(0, 0);
-        self.api.set_root_pipeline(pipeline_id);
-
+impl WebrenderWindow {
+    fn build_tree(&mut self) {
         let layout_size = LayoutSize::new(self.size.width as f32, self.size.height as f32);
-        let mut builder = DisplayListBuilder::new(pipeline_id, layout_size);
+        let mut builder = DisplayListBuilder::new(PipelineId(0, 0), layout_size);
         self.theme.build_display_list(&mut builder, &self.tree, &layout_size);
 
-        let epoch = Epoch(0);
-        let root_background_color = ColorF::new(0.0, 0.3, 0.0, 1.0);
+        let epoch = Epoch(self.epoch);
+        self.epoch = self.epoch + 1;
+        let root_background_color = ColorF::new(0.0, 0.7, 0.0, 1.0);
+        self.api.set_window_parameters(self.size, DeviceUintRect::new(DeviceUintPoint::new(0, 0), self.size));
         self.api.set_display_list(Some(root_background_color),
                              epoch,
                              layout_size,

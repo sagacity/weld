@@ -10,15 +10,13 @@ use yoga::FlexStyle::*;
 
 fn main() {
     let mut window = WindowFactory::new("Demo");
-    let width = window.size().width as f32;
-    let height = window.size().height as f32;
 
     window.update_tree(&|| {
         let mut tree = ComponentTree::new();
 
         let root = tree.add_node(SplitterBuilder::new(vec![
-            Width(width.point()),
-            Height(height.point()),
+            Width(100.percent()),
+            Height(100.percent()),
             FlexDirection(FlexDirection::Row),
             Padding(25.point())
         ]), None);
