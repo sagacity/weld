@@ -51,20 +51,32 @@ impl Theme {
     pub fn find_visual_at(&self, point: WorldPoint) {
         println!("Clicked at: {:?}", point);
         let tree = self.visual_tree.as_ref().unwrap();
-        for node in tree.traverse_post_order(tree.root_node_id().unwrap()).unwrap() {
-            let data = node.data();
-            let layout = &data.yoga.get_layout();
-            if
-                (point.x >= layout.left) && (point.x <= layout.left + layout.width) &&
-                    (point.y >= layout.top) && (point.y <= layout.top + layout.height)
-                {
-                    println!("yay");
-                    break;
+        if let Some(visual) = self.find_visual_at_node(point, tree.root_node_id().unwrap()) {
+            println!("Found in visual: {:?}", visual);
+        }
+    }
+
+    fn find_visual_at_node(&self, point: WorldPoint, node_id: &NodeId) -> Option<&Visual> {
+        let tree = self.visual_tree.as_ref().unwrap();
+        let node = tree.get(node_id).unwrap();
+        let visual = node.data();
+        let layout = &visual.yoga.get_layout();
+        let rect = WorldRect::new(WorldPoint::new(layout.left, layout.top), WorldSize::new(layout.width, layout.height));
+        if !rect.contains(&point) {
+            None
+        } else {
+            for child_id in node.children() {
+                if let Some(found_in_child) = self.find_visual_at_node(point, child_id) {
+                    return Some(found_in_child);
                 }
+            }
+
+            Some(visual)
         }
     }
 }
 
+#[derive(Debug)]
 pub struct Visual {
     yoga: YogaNode
 }
