@@ -17,6 +17,9 @@ pub struct Component {
     data_bag: DataBag,
 }
 
+unsafe impl Send for Component {}
+unsafe impl Sync for Component {}
+
 impl Component {
     pub ( crate ) fn new(t: Type, styles: Vec<yoga::FlexStyle>) -> Component {
         Component {

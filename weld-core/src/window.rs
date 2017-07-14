@@ -5,7 +5,11 @@ use webrender;
 use webrender::api::*;
 use component_tree::ComponentTree;
 use theme::Theme;
+use events::Event;
+use std::thread;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Sender;
 
 struct Notifier {
     proxy: glutin::EventsLoopProxy
@@ -29,14 +33,11 @@ impl RenderNotifier for Notifier {
     }
 }
 
-pub trait Window {
-    fn run(&mut self);
-    fn update_tree(&mut self, tree_builder: &Fn() -> ComponentTree);
+pub struct WebrenderWindow {
+    inner: Arc<Mutex<WebrenderWindowData>>
 }
 
-pub struct WindowFactory;
-
-struct WebrenderWindow {
+pub struct WebrenderWindowData {
     title: &'static str,
     tree: ComponentTree
 }
@@ -48,19 +49,30 @@ struct TreeBuilderContext<'a> {
     epoch: &'a Epoch,
 }
 
-
-impl WindowFactory {
-    pub fn new(title: &'static str) -> Box<Window> {
-        return
-            Box::new(WebrenderWindow {
+impl WebrenderWindow {
+    pub fn new(title: &'static str) -> WebrenderWindow {
+        WebrenderWindow {
+            inner: Arc::new(Mutex::new(WebrenderWindowData {
                 title,
                 tree: ComponentTree::new()
-            });
+            }))
+        }
+    }
+
+    pub fn start_thread(&self, event_sender: Sender<Event>) -> thread::JoinHandle<()> {
+        let local_self = self.inner.clone();
+        thread::spawn(move || {
+            local_self.lock().unwrap().run_gl(event_sender);
+        })
+    }
+
+    pub fn update_tree(&self, tree_builder: &Fn() -> ComponentTree) {
+        self.inner.lock().unwrap().tree = tree_builder();
     }
 }
 
-impl Window for WebrenderWindow {
-    fn run(&mut self) {
+impl WebrenderWindowData {
+    fn run_gl(&mut self, event_sender: Sender<Event>) {
         let mut events_loop = glutin::EventsLoop::new();
         let window = glutin::WindowBuilder::new()
             .with_title(self.title)
@@ -155,14 +167,10 @@ impl Window for WebrenderWindow {
 
             glutin::ControlFlow::Continue
         });
+
+        let _ = event_sender.send(Event::ApplicationClosed);
     }
 
-    fn update_tree(&mut self, tree_builder: &Fn() -> ComponentTree) {
-        self.tree = tree_builder();
-    }
-}
-
-impl WebrenderWindow {
     fn build_tree(&mut self, context: TreeBuilderContext) {
         let layout_size = LayoutSize::new(context.size.width as f32, context.size.height as f32);
         let mut builder = DisplayListBuilder::new(PipelineId(0, 0), layout_size);

@@ -1,7 +1,7 @@
 extern crate weld;
 extern crate weld_core;
 
-use weld_core::window::WindowFactory;
+use weld_core::application::Application;
 use weld_core::components::*;
 use weld_core::component_tree::ComponentTree;
 use weld_core::layout::{FlexDirection, Percent, Point};
@@ -9,9 +9,9 @@ use weld_core::layout::FlexStyle::*;
 use weld_core::layout::Align::*;
 
 fn main() {
-    let mut window = WindowFactory::new("Demo");
+    let app = Application::new("Demo");
 
-    window.update_tree(&|| {
+    app.window().update_tree(&|| {
         let mut tree = ComponentTree::new();
 
         let root = tree.add_node(SplitterBuilder::new(vec![
@@ -37,5 +37,5 @@ fn main() {
         tree
     });
 
-    window.run();
+    app.run();
 }
