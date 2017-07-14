@@ -2,6 +2,8 @@ extern crate id_tree;
 extern crate euclid;
 extern crate gleam;
 extern crate glutin;
+#[macro_use]
+extern crate log;
 extern crate snowflake;
 extern crate webrender;
 extern crate rand;

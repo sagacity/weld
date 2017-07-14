@@ -19,6 +19,7 @@ impl Application {
 
         loop {
             let event = self.events.receiver().recv().unwrap();
+            info!("Received application event: {:?}", event);
             match event {
                 Event::ApplicationClosed => break,
                 _ => ()

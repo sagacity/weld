@@ -1,6 +1,7 @@
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
 
+#[derive(Debug)]
 pub enum Event {
     ApplicationClosed,
     Pressed
