@@ -1,3 +1,4 @@
+use component::Component;
 use window::WebrenderWindow;
 use events::{Event, EventStream};
 
@@ -14,7 +15,7 @@ impl Application {
         }
     }
 
-    pub fn run(&self) {
+    pub fn run(&self, root: Component) {
         let window_join_handle = self.window.start_thread(self.events.sender());
 
         loop {

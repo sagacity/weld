@@ -1,4 +1,3 @@
-extern crate id_tree;
 extern crate euclid;
 extern crate gleam;
 extern crate glutin;
@@ -10,10 +9,8 @@ extern crate rand;
 
 pub extern crate yoga;
 
-pub mod components;
-
 pub mod application;
-pub mod component_tree;
+pub mod component;
 pub mod data_bag;
 pub mod events;
 pub mod theme;

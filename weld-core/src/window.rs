@@ -3,8 +3,8 @@ use glutin;
 use glutin::GlContext;
 use webrender;
 use webrender::api::*;
-use component_tree::ComponentTree;
-use theme::Theme;
+//use component_tree::ComponentTree;
+//use theme::Theme;
 use events::Event;
 use std::thread;
 use std::sync::{Arc, Mutex};
@@ -39,12 +39,12 @@ pub struct WebrenderWindow {
 
 pub struct WebrenderWindowData {
     title: &'static str,
-    tree: ComponentTree
+    //tree: ComponentTree
 }
 
 struct TreeBuilderContext<'a> {
     size: DeviceUintSize,
-    theme: &'a mut Theme,
+    //theme: &'a mut Theme,
     api: &'a RenderApi,
     epoch: &'a Epoch,
 }
@@ -54,7 +54,7 @@ impl WebrenderWindow {
         WebrenderWindow {
             inner: Arc::new(Mutex::new(WebrenderWindowData {
                 title,
-                tree: ComponentTree::new()
+                //tree: ComponentTree::new()
             }))
         }
     }
@@ -66,9 +66,9 @@ impl WebrenderWindow {
         })
     }
 
-    pub fn update_tree(&self, tree_builder: &Fn() -> ComponentTree) {
+    /*pub fn update_tree(&self, tree_builder: &Fn() -> ComponentTree) {
         self.inner.lock().unwrap().tree = tree_builder();
-    }
+    }*/
 }
 
 impl WebrenderWindowData {
@@ -116,7 +116,7 @@ impl WebrenderWindowData {
         let notifier = Box::new(Notifier::new(events_loop.create_proxy()));
         renderer.set_render_notifier(notifier);
 
-        let mut theme = Theme::new();
+        //let mut theme = Theme::new();
         let mut epoch = Epoch(0);
         let mut dirty = true;
         let mut busy_rendering = AtomicBool::new(false);
@@ -143,7 +143,7 @@ impl WebrenderWindowData {
                         mouse = WorldPoint::new(x as f32, y as f32);
                     }
                     glutin::WindowEvent::MouseInput { button: glutin::MouseButton::Left, .. } => {
-                        theme.find_visual_at(mouse);
+                        //theme.find_visual_at(mouse);
                     },
                     _ => (),
                 },
@@ -155,12 +155,12 @@ impl WebrenderWindowData {
                     println!("Was not busy rendering, so starting now...");
                     dirty = false;
 
-                    self.build_tree(TreeBuilderContext {
+                    /*self.build_tree(TreeBuilderContext {
                         size: DeviceUintSize::new(size.0, size.1),
                         theme: &mut theme,
                         api: &api,
                         epoch: &epoch
-                    });
+                    });*/
                     epoch.0 = epoch.0 + 1;
                 }
             }
@@ -171,7 +171,7 @@ impl WebrenderWindowData {
         let _ = event_sender.send(Event::ApplicationClosed);
     }
 
-    fn build_tree(&mut self, context: TreeBuilderContext) {
+    /*fn build_tree(&mut self, context: TreeBuilderContext) {
         let layout_size = LayoutSize::new(context.size.width as f32, context.size.height as f32);
         let mut builder = DisplayListBuilder::new(PipelineId(0, 0), layout_size);
         context.theme.build_display_list(&mut builder, &self.tree, &layout_size);
@@ -184,5 +184,5 @@ impl WebrenderWindowData {
                                      builder.finalize(),
                                      true);
         context.api.generate_frame(None);
-    }
+    }*/
 }

@@ -1,209 +1,112 @@
 use webrender::api::*;
-use component_tree::ComponentTree;
-use components::component::*;
-use id_tree::{Tree, TreeBuilder, NodeId, Node, InsertBehavior};
+use component::{Component, ComponentId};
 use std::collections::HashMap;
-use yoga::Node as YogaNode;
-use yoga::Direction;
-use snowflake::ProcessUniqueId;
+use std::cell::{Ref, RefMut, RefCell};
+use layout;
 
 pub struct Theme {
-    visual_tree: Option<Tree<Visual>>
+    layout_nodes: HashMap<ComponentId, RefCell<layout::Node>>
 }
 
 impl Theme {
     pub fn new() -> Theme {
         Theme {
-            visual_tree: None
+            layout_nodes: HashMap::new()
         }
     }
 
-    pub fn build_display_list(&mut self, builder: &mut DisplayListBuilder, tree: &ComponentTree, size: &LayoutSize) {
-        let mut visual_tree = VisualBuilder::new(tree.tree()).build_visual_tree();
-        visual_tree.calculate_layout(size.width, size.height);
-
-        self.build_node(builder, &visual_tree, visual_tree.tree().root_node_id().unwrap());
-
-        self.visual_tree = Some(visual_tree.visual_tree)
+    pub fn get_layout(&mut self, node: &Component) -> layout::Layout {
+        self.get_layout_node(node).get_layout()
     }
 
-    fn build_node(&self, builder: &mut DisplayListBuilder, visual_tree: &VisualTree, node_id: &NodeId) {
+    pub fn update_layout(&mut self, root: &Component, size: &LayoutSize) {
+        self.update_layout_recursive(root);
+        self.get_layout_node_mut(root).calculate_layout(size.width, size.height, layout::Direction::LTR);
+    }
+
+    fn update_layout_recursive(&mut self, node: &Component) {
+        {
+            let mut layout_node = self.layout_nodes.entry(*node.id()).or_insert_with(|| RefCell::new(layout::Node::new()));
+            layout_node.borrow_mut().apply_styles(node.styles());
+        }
+
+        for child in node.children() {
+            self.update_layout_recursive(child);
+
+            let mut layout_node = self.get_layout_node_mut(node);
+            let mut layout_child = self.get_layout_node_mut(child);
+            let child_count = layout_node.child_count();
+            layout_node.insert_child(&mut layout_child, child_count);
+        }
+    }
+
+    pub fn build_display_list(&self, builder: &mut DisplayListBuilder, root: &Component) {
+        self.build_display_list_recursive(builder, root);
+    }
+
+    fn build_display_list_recursive(&self, builder: &mut DisplayListBuilder, node: &Component) {
         use rand::{random, Closed01};
 
-        let node = visual_tree.tree().get(node_id).unwrap();
-        let yoga = &node.data().yoga;
+        let layout_node = self.get_layout_node(node);
+        let layout = layout_node.get_layout();
 
         let color = ColorF::new(random::<Closed01<f32>>().0, random::<Closed01<f32>>().0, random::<Closed01<f32>>().0, 1.0);
         let bounds = LayoutRect::new(
-            LayoutPoint::new(yoga.get_layout().left, yoga.get_layout().top),
-            LayoutSize::new(yoga.get_layout().width, yoga.get_layout().height)
+            LayoutPoint::new(layout.left, layout.top),
+            LayoutSize::new(layout.width, layout.height)
         );
-        println!("layout: {:?}", yoga.get_layout());
+        println!("layout: {:?}", layout);
         println!("bounds: {:?}", bounds);
 
         builder.push_rect(bounds, None, color);
 
-        for child_id in node.children() {
-            self.build_node(builder, visual_tree, child_id);
+        for child in node.children() {
+            self.build_display_list_recursive(builder, child);
         }
     }
 
-    pub fn find_visual_at(&self, point: WorldPoint) {
-        println!("Clicked at: {:?}", point);
-        let tree = self.visual_tree.as_ref().unwrap();
-        if let Some(visual) = self.find_visual_at_node(point, tree.root_node_id().unwrap()) {
-            println!("Found in visual: {:?}", visual);
-        }
+    fn get_layout_node(&self, node: &Component) -> Ref<layout::Node> {
+        self.layout_nodes.get(node.id()).unwrap().borrow()
     }
 
-    fn find_visual_at_node(&self, point: WorldPoint, node_id: &NodeId) -> Option<&Visual> {
-        let tree = self.visual_tree.as_ref().unwrap();
-        let node = tree.get(node_id).unwrap();
-        let visual = node.data();
-        let layout = &visual.yoga.get_layout();
-        let rect = WorldRect::new(WorldPoint::new(layout.left, layout.top), WorldSize::new(layout.width, layout.height));
-        if !rect.contains(&point) {
-            None
-        } else {
-            for child_id in node.children() {
-                if let Some(found_in_child) = self.find_visual_at_node(point, child_id) {
-                    return Some(found_in_child);
-                }
-            }
-
-            Some(visual)
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Visual {
-    yoga: YogaNode
-}
-
-pub struct VisualTree {
-    visual_tree: Tree<Visual>
-}
-
-impl VisualTree {
-    pub fn tree(&self) -> &Tree<Visual> {
-        &self.visual_tree
-    }
-
-    pub fn calculate_layout(&mut self, width: f32, height: f32) {
-        let root = self.visual_tree.root_node_id().unwrap().clone();
-        self.visual_tree.get_mut(&root).unwrap().data_mut().yoga.calculate_layout(width, height, Direction::LTR);
-    }
-}
-
-struct VisualBuilder<'a> {
-    logical_tree: &'a Tree<Box<Component>>,
-    visual_tree: Tree<Visual>,
-    node_to_visual_map: HashMap<ProcessUniqueId, NodeId>
-}
-
-impl<'a> VisualBuilder<'a> {
-    fn new(tree: &'a Tree<Box<Component>>) -> VisualBuilder<'a> {
-        VisualBuilder {
-            logical_tree: tree,
-            visual_tree: TreeBuilder::new().build(),
-            node_to_visual_map: HashMap::new()
-        }
-    }
-
-    fn build_visual_tree(mut self) -> VisualTree {
-        self.add_node(self.logical_tree.root_node_id().unwrap());
-
-        VisualTree {
-            visual_tree: self.visual_tree
-        }
-    }
-
-    fn add_node(&mut self, logical_node_id: &NodeId) {
-        let node = self.logical_tree.get(logical_node_id).unwrap();
-        println!("Adding {:?}", node.data().component_type);
-        println!("Styles {:?}", node.data().styles);
-
-        let mut yoga = YogaNode::new();
-        yoga.apply_styles(&node.data().styles);
-        let visual_node = Node::new(Visual { yoga });
-
-        let visual_parent_id = self.get_visual_node(node.parent());
-        self.insert_visual_node(node, visual_node, visual_parent_id);
-
-        for child_id in node.children() {
-            self.add_node(child_id);
-        }
-    }
-
-    fn get_visual_node(&self, logical_parent_node: Option<&NodeId>) -> Option<NodeId> {
-        match logical_parent_node {
-            Some(logical_parent_id) => {
-                let key = &self.logical_tree.get(logical_parent_id).unwrap().data().id;
-                Some(self.node_to_visual_map.get(key).unwrap().clone())
-            }
-            None => None
-        }
-    }
-
-    fn insert_visual_node(&mut self, logical_node: &Node<Box<Component>>, mut visual_node: Node<Visual>, visual_parent_id: Option<NodeId>) -> NodeId {
-        // The new node has a visual parent, so attach the YogaNode to the parent YogaNode as well
-        if let Some(ref vpi) = visual_parent_id {
-            let mut visual = visual_node.data_mut();
-            let mut parent_yoga = &mut self.visual_tree.get_mut(&vpi).unwrap().data_mut().yoga;
-            let child_count = parent_yoga.child_count();
-            parent_yoga.insert_child(&mut visual.yoga, child_count);
-            println!("Inserted into parent yoga at pos {:?}", child_count);
-        }
-
-        let insert_behavior = match visual_parent_id {
-            Some(ref vpi) => InsertBehavior::UnderNode(&vpi),
-            None => InsertBehavior::AsRoot
-        };
-        let visual_node_id = self.visual_tree.insert(visual_node, insert_behavior).unwrap();
-        self.node_to_visual_map.insert(logical_node.data().id, visual_node_id.clone());
-
-        visual_node_id
+    fn get_layout_node_mut(&self, node: &Component) -> RefMut<layout::Node> {
+        self.layout_nodes.get(node.id()).unwrap().borrow_mut()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use components;
-    use components::panel::PanelSize;
-    use component_tree::ComponentTree;
-    use yoga::{Direction, Layout, Percent, Point, FlexStyle, FlexDirection};
+    use euclid::size2;
+    use component::panel;
+    use layout::*;
 
     #[test]
-    fn test_splitter() {
-        let mut tree = ComponentTree::new();
-        let mut splitter: Component = components::SplitterBuilder::new(vec![
+    fn can_build_list() {
+        let tree = panel(vec![
             FlexStyle::Width(1000.point()),
             FlexStyle::Height(1000.point()),
             FlexStyle::FlexDirection(FlexDirection::Row)
-        ]).into();
-        let root = tree.add_node(splitter, None);
+        ], vec![
+            panel(vec![
+                FlexStyle::Width(30.percent()),
+                FlexStyle::Height(100.percent())
+            ], vec![]),
+            panel(vec![
+                FlexStyle::Width(70.percent()),
+                FlexStyle::Height(100.percent())
+            ], vec![]),
+        ]);
 
-        let mut panel1: Component = components::PanelBuilder::new(vec![
-            FlexStyle::Width(30.percent()),
-            FlexStyle::Height(100.percent())
-        ]).into();
-        tree.add_node(panel1, Some(&root));
+        let size = size2(1000.0, 1000.0);
+        let mut theme = Theme::new();
+        theme.update_layout(&tree, &size);
 
-        let mut panel2: Component = components::PanelBuilder::new(vec![
-            FlexStyle::Width(70.percent()),
-            FlexStyle::Height(100.percent())
-        ]).into();
-        tree.add_node(panel2, Some(&root));
-
-        let mut visual_tree = VisualBuilder::new(tree.tree()).build_visual_tree();
-        visual_tree.calculate_layout(1000.0, 1000.0);
-
-        let sizes: Vec<Layout> = visual_tree.tree().traverse_pre_order(visual_tree.tree().root_node_id().unwrap())
-            .unwrap()
-            .map(|node| node.data().yoga.get_layout())
-            .collect();
+        let sizes = vec![
+            theme.get_layout(&tree),
+            theme.get_layout(&tree.children()[0]),
+            theme.get_layout(&tree.children()[1]),
+        ];
 
         assert_eq!(sizes, vec![
             Layout { left: 0.0, right: 0.0, top: 0.0, bottom: 0.0, width: 1000.0, height: 1000.0 },
