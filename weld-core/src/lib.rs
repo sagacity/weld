@@ -13,7 +13,7 @@ pub mod application;
 pub mod component;
 pub mod data_bag;
 pub mod events;
-pub mod theme;
+pub mod layout_context;
 pub mod window;
 
 pub use yoga as layout;

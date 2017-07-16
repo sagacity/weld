@@ -1,6 +1,8 @@
 use data_bag::DataBag;
+use events::Event;
 use snowflake::ProcessUniqueId;
 use layout::FlexStyle;
+use std::fmt;
 
 pub type ComponentId = ProcessUniqueId;
 
@@ -12,17 +14,23 @@ pub enum Type {
     Button
 }
 
-#[derive(Debug)]
 pub struct Component {
     id: ComponentId,
     component_type: Type,
     styles: Vec<FlexStyle>,
     children: Vec<Component>,
+    event_handler: Option<Box<Fn(&Event) + 'static + Send>>,
     data_bag: DataBag,
 }
 
+impl fmt::Debug for Component {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Component {{ id: {} }}", self.id)
+    }
+}
+
 impl Component {
-    pub fn new<S, C>(t: Type, styles: S, children: C) -> Component where S: IntoIterator<Item=FlexStyle>, C: IntoIterator<Item=Component> {
+    pub fn new<S, C>(t: Type, styles: S, children: C, events: Option<Box<Fn(&Event) + 'static + Send>>) -> Component where S: IntoIterator<Item=FlexStyle>, C: IntoIterator<Item=Component> {
         let mut s = Vec::new();
         s.extend(styles);
         let mut c = Vec::new();
@@ -32,6 +40,7 @@ impl Component {
             component_type: t,
             styles: s,
             children: c,
+            event_handler: events,
             data_bag: DataBag::new(),
         }
     }
@@ -59,10 +68,38 @@ impl Component {
     pub fn styles(&self) -> &Vec<FlexStyle> {
         &self.styles
     }
+
+    pub fn find<'a>(&'a self, id: &ComponentId) -> Option<&'a Component> {
+        find_recursive(self, id)
+    }
+
+    pub fn handle(&self, event: &Event) {
+        if let Some(ref handler) = self.event_handler {
+            handler(event);
+        }
+    }
+}
+
+fn find_recursive<'a>(node: &'a Component, id: &ComponentId) -> Option<&'a Component> {
+    if node.id() == id {
+        return Some(node);
+    }
+
+    for child in node.children() {
+        if let Some(found) = find_recursive(child, id) {
+            return Some(found);
+        }
+    }
+
+    None
 }
 
 pub fn panel<S, C>(styles: S, children: C) -> Component where S: IntoIterator<Item=FlexStyle>, C: IntoIterator<Item=Component> {
-    Component::new(Type::Panel, styles, children)
+    Component::new(Type::Panel, styles, children, None)
+}
+
+pub fn panel2<S, C, E>(styles: S, children: C, events: E) -> Component where S: IntoIterator<Item=FlexStyle>, C: IntoIterator<Item=Component>, E: Fn(&Event) + Send + 'static {
+    Component::new(Type::Panel, styles, children, Some(Box::new(events)))
 }
 
 #[cfg(test)]

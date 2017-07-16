@@ -29,6 +29,13 @@ impl Application {
             info!("Received application event: {:?}", event);
             match event {
                 Event::ApplicationClosed => break,
+                Event::Pressed(maybe_id) => {
+                    if let Some(ref id) = maybe_id {
+                        if let Some(ref component) = tree.lock().unwrap().find(id) {
+                            component.handle(&event);
+                        }
+                    }
+                }
                 _ => ()
             }
         }

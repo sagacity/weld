@@ -5,7 +5,7 @@ use webrender;
 use webrender::api::*;
 use component::Component;
 use events::Event;
-use theme::Theme;
+use layout_context::LayoutContext;
 use std::thread;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -143,7 +143,7 @@ fn run_gl(local_self: Arc<Mutex<WebrenderWindowData>>, event_sender: Sender<Even
     let notifier = Box::new(Notifier::new(events_loop.create_proxy()));
     renderer.set_render_notifier(notifier);
 
-    let mut theme = Theme::new();
+    let mut layout_context = LayoutContext::new();
 
     let mut busy_rendering = AtomicBool::new(false);
     let mut need_render = true;
@@ -173,8 +173,13 @@ fn run_gl(local_self: Arc<Mutex<WebrenderWindowData>>, event_sender: Sender<Even
                 glutin::WindowEvent::MouseMoved { position: (x, y), .. } => {
                     mouse = WorldPoint::new(x as f32, y as f32);
                 }
-                glutin::WindowEvent::MouseInput { button: glutin::MouseButton::Left, .. } => {
-                    let _ = event_sender.send(Event::Pressed);
+                glutin::WindowEvent::MouseInput { button: glutin::MouseButton::Left, state: glutin::ElementState::Pressed, .. } => {
+                    if let Some(ref mut context) = local_self.lock().unwrap().tree_context {
+                        let node = layout_context
+                            .find_node_at(mouse, &context.tree.lock().unwrap())
+                            .map(|node| *node.id());
+                        let _ = event_sender.send(Event::Pressed(node));
+                    }
                 },
                 _ => (),
             },
@@ -196,7 +201,7 @@ fn run_gl(local_self: Arc<Mutex<WebrenderWindowData>>, event_sender: Sender<Even
                 let layout_size = LayoutSize::new(glsize.0 as f32, glsize.1 as f32);
 
                 if let Some(ref mut context) = local_self.lock().unwrap().tree_context {
-                    generate_frame(&api, &layout_size, &context.epoch, &mut theme, &context.tree.lock().unwrap());
+                    generate_frame(&api, &layout_size, &context.epoch, &mut layout_context, &context.tree.lock().unwrap());
                     context.rendered_epoch = context.epoch;
                 }
             }
@@ -208,23 +213,23 @@ fn run_gl(local_self: Arc<Mutex<WebrenderWindowData>>, event_sender: Sender<Even
     let _ = event_sender.send(Event::ApplicationClosed);
 }
 
-fn generate_frame(api: &RenderApi, layout_size: &LayoutSize, epoch: &Epoch, theme: &mut Theme, tree: &Component) {
+fn generate_frame(api: &RenderApi, layout_size: &LayoutSize, epoch: &Epoch, layout_context: &mut LayoutContext, tree: &Component) {
     let device_size = DeviceUintSize::new(layout_size.width as u32, layout_size.height as u32);
     let root_background_color = ColorF::new(0.0, 0.7, 0.0, 1.0);
     api.set_window_parameters(device_size, DeviceUintRect::new(DeviceUintPoint::zero(), device_size));
     api.set_display_list(Some(root_background_color),
                                  webrender::api::Epoch(epoch.0),
                                  *layout_size,
-                                 build_display_list(&layout_size, theme, tree).finalize(),
+                                 build_display_list(&layout_size, layout_context, tree).finalize(),
                                  true);
     api.generate_frame(None);
 }
 
-fn build_display_list(layout_size: &LayoutSize, theme: &mut Theme, tree: &Component) -> DisplayListBuilder {
+fn build_display_list(layout_size: &LayoutSize, layout_context: &mut LayoutContext, tree: &Component) -> DisplayListBuilder {
     let mut builder = DisplayListBuilder::new(PipelineId(0, 0), *layout_size);
 
-    theme.update_layout(&tree, layout_size);
-    theme.build_display_list(&mut builder, &tree);
+    layout_context.update_layout(&tree, layout_size);
+    layout_context.build_display_list(&mut builder, &tree);
 
     builder
 }

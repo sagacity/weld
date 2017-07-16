@@ -4,18 +4,18 @@ use std::collections::HashMap;
 use std::cell::{Ref, RefMut, RefCell};
 use layout;
 
-pub struct Theme {
+pub struct LayoutContext {
     layout_nodes: HashMap<ComponentId, RefCell<layout::Node>>
 }
 
-impl Theme {
-    pub fn new() -> Theme {
-        Theme {
+impl LayoutContext {
+    pub fn new() -> LayoutContext {
+        LayoutContext {
             layout_nodes: HashMap::new()
         }
     }
 
-    pub fn get_layout(&mut self, node: &Component) -> layout::Layout {
+    pub fn get_layout(&self, node: &Component) -> layout::Layout {
         self.get_layout_node(node).get_layout()
     }
 
@@ -75,6 +75,26 @@ impl Theme {
     fn get_layout_node_mut(&self, node: &Component) -> RefMut<layout::Node> {
         self.layout_nodes.get(node.id()).unwrap().borrow_mut()
     }
+
+    pub fn find_node_at<'a>(&self, point: WorldPoint, root: &'a Component) -> Option<&'a Component> {
+        self.find_node_at_recursive(point, root)
+    }
+
+    fn find_node_at_recursive<'a>(&self, point: WorldPoint, node: &'a Component) -> Option<&'a Component> {
+        let layout = self.get_layout(node);
+        let rect = WorldRect::new(WorldPoint::new(layout.left, layout.top), WorldSize::new(layout.width, layout.height));
+        if !rect.contains(&point) {
+            None
+        } else {
+            for child_id in node.children() {
+                if let Some(found_in_child) = self.find_node_at_recursive(point, child_id) {
+                    return Some(found_in_child);
+                }
+            }
+
+            Some(node)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -102,13 +122,13 @@ mod tests {
         ]);
 
         let size = size2(1000.0, 1000.0);
-        let mut theme = Theme::new();
-        theme.update_layout(&tree, &size);
+        let mut layout_context = LayoutContext::new();
+        layout_context.update_layout(&tree, &size);
 
         let sizes = vec![
-            theme.get_layout(&tree),
-            theme.get_layout(&tree.children()[0]),
-            theme.get_layout(&tree.children()[1]),
+            layout_context.get_layout(&tree),
+            layout_context.get_layout(&tree.children()[0]),
+            layout_context.get_layout(&tree.children()[1]),
         ];
 
         assert_eq!(sizes, vec![
