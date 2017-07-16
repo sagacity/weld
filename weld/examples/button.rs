@@ -11,7 +11,7 @@ use weld_core::layout::Align::*;
 fn main() {
     pretty_env_logger::init().unwrap();
 
-    let app = Application::new("Demo");
+    let mut app = Application::new("Demo");
 
     let root = panel(vec![
         Width(100.percent()),

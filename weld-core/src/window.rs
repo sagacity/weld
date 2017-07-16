@@ -3,9 +3,9 @@ use glutin;
 use glutin::GlContext;
 use webrender;
 use webrender::api::*;
-//use component_tree::ComponentTree;
-//use theme::Theme;
+use component::Component;
 use events::Event;
+use theme::Theme;
 use std::thread;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -39,14 +39,17 @@ pub struct WebrenderWindow {
 
 pub struct WebrenderWindowData {
     title: &'static str,
-    //tree: ComponentTree
+    render_context: Option<RenderContext>,
+    tree_context: Option<TreeContext>
 }
 
-struct TreeBuilderContext<'a> {
-    size: DeviceUintSize,
-    //theme: &'a mut Theme,
-    api: &'a RenderApi,
-    epoch: &'a Epoch,
+struct RenderContext {
+    event_loop_proxy: glutin::EventsLoopProxy,
+}
+
+struct TreeContext {
+    tree: Arc<Component>,
+    dirty: bool,
 }
 
 impl WebrenderWindow {
@@ -54,135 +57,164 @@ impl WebrenderWindow {
         WebrenderWindow {
             inner: Arc::new(Mutex::new(WebrenderWindowData {
                 title,
-                //tree: ComponentTree::new()
+                render_context: None,
+                tree_context: None
             }))
         }
     }
 
-    pub fn start_thread(&self, event_sender: Sender<Event>) -> thread::JoinHandle<()> {
+    pub fn start_thread(&mut self, event_sender: Sender<Event>) -> thread::JoinHandle<()> {
         let local_self = self.inner.clone();
         thread::spawn(move || {
-            local_self.lock().unwrap().run_gl(event_sender);
+            run_gl(local_self, event_sender);
         })
     }
 
-    /*pub fn update_tree(&self, tree_builder: &Fn() -> ComponentTree) {
-        self.inner.lock().unwrap().tree = tree_builder();
-    }*/
-}
+    pub fn update(&mut self, root: Arc<Component>) {
+        let mut inner = self.inner.lock().unwrap();
 
-impl WebrenderWindowData {
-    fn run_gl(&mut self, event_sender: Sender<Event>) {
-        let mut events_loop = glutin::EventsLoop::new();
-        let window = glutin::WindowBuilder::new()
-            .with_title(self.title)
-            .with_multitouch();
-
-        let context = glutin::ContextBuilder::new().with_vsync(false);
-        let gl_window = glutin::GlWindow::new(window, context, &events_loop).unwrap();
-
-        unsafe {
-            let _ = gl_window.make_current().unwrap();
-        };
-
-        let gl = match gl::GlType::default() {
-            gl::GlType::Gl => unsafe {
-                gl::GlFns::load_with(|symbol| gl_window.get_proc_address(symbol) as *const _)
-            },
-            gl::GlType::Gles => unsafe {
-                gl::GlesFns::load_with(|symbol| gl_window.get_proc_address(symbol) as *const _)
-            }
-        };
-
-        //println!("OpenGL version {}", gl.get_string(gl::VERSION));
-        //println!("Shader resource path: {:?}", res_path);
-
-        let (width, height) = gl_window.get_inner_size_pixels().unwrap();
-
-        let opts = webrender::RendererOptions {
-            //resource_override_path: res_path,
-            debug: true,
-            precache_shaders: true,
-            device_pixel_ratio: 1.0,
-            //window.hidpi_factor(),
-            ..webrender::RendererOptions::default()
-        };
-
-        let (mut renderer, sender) = webrender::renderer::Renderer::new(gl, opts, DeviceUintSize::new(width, height)).unwrap();
-        let api = sender.create_api();
-
-        api.set_root_pipeline(PipelineId(0, 0));
-
-        let notifier = Box::new(Notifier::new(events_loop.create_proxy()));
-        renderer.set_render_notifier(notifier);
-
-        //let mut theme = Theme::new();
-        let mut epoch = Epoch(0);
-        let mut dirty = true;
-        let mut busy_rendering = AtomicBool::new(false);
-
-        let mut mouse = WorldPoint::zero();
-
-        events_loop.run_forever(|event| {
-            let size = gl_window.get_inner_size_pixels().unwrap();
-            match event {
-                glutin::Event::Awakened => {
-                    println!("Awakened");
-                    renderer.update();
-                    renderer.render(DeviceUintSize::new(size.0, size.1));
-                    let _ = gl_window.swap_buffers().unwrap();
-                    *busy_rendering.get_mut() = false;
-                }
-                glutin::Event::WindowEvent { event, .. } => match event {
-                    glutin::WindowEvent::Closed => return glutin::ControlFlow::Break,
-                    glutin::WindowEvent::Resized(w, h) => {
-                        gl_window.resize(w, h);
-                        dirty = true;
-                    },
-                    glutin::WindowEvent::MouseMoved { position: (x, y), .. } => {
-                        mouse = WorldPoint::new(x as f32, y as f32);
-                    }
-                    glutin::WindowEvent::MouseInput { button: glutin::MouseButton::Left, .. } => {
-                        //theme.find_visual_at(mouse);
-                    },
-                    _ => (),
-                },
-                _ => ()
-            }
-
-            if dirty {
-                if busy_rendering.compare_and_swap(false, true, Ordering::Relaxed) == false {
-                    println!("Was not busy rendering, so starting now...");
-                    dirty = false;
-
-                    /*self.build_tree(TreeBuilderContext {
-                        size: DeviceUintSize::new(size.0, size.1),
-                        theme: &mut theme,
-                        api: &api,
-                        epoch: &epoch
-                    });*/
-                    epoch.0 = epoch.0 + 1;
-                }
-            }
-
-            glutin::ControlFlow::Continue
+        // Replace the tree
+        inner.tree_context = Some(TreeContext {
+            tree: root,
+            dirty: true
         });
 
-        let _ = event_sender.send(Event::ApplicationClosed);
+        // Notify the event loop
+        if let Some(ref context) = inner.render_context {
+            let _ = context.event_loop_proxy.wakeup().unwrap();
+        }
     }
+}
 
-    /*fn build_tree(&mut self, context: TreeBuilderContext) {
-        let layout_size = LayoutSize::new(context.size.width as f32, context.size.height as f32);
-        let mut builder = DisplayListBuilder::new(PipelineId(0, 0), layout_size);
-        context.theme.build_display_list(&mut builder, &self.tree, &layout_size);
+fn run_gl(local_self: Arc<Mutex<WebrenderWindowData>>, event_sender: Sender<Event>) {
+    let mut events_loop = glutin::EventsLoop::new();
+    let window = glutin::WindowBuilder::new()
+        .with_title(local_self.lock().unwrap().title)
+        .with_multitouch();
 
-        let root_background_color = ColorF::new(0.0, 0.7, 0.0, 1.0);
-        context.api.set_window_parameters(context.size, DeviceUintRect::new(DeviceUintPoint::zero(), context.size));
-        context.api.set_display_list(Some(root_background_color),
-                                     *context.epoch,
-                                     layout_size,
-                                     builder.finalize(),
-                                     true);
-        context.api.generate_frame(None);
-    }*/
+    let context = glutin::ContextBuilder::new().with_vsync(false);
+    let gl_window = glutin::GlWindow::new(window, context, &events_loop).unwrap();
+
+    unsafe {
+        let _ = gl_window.make_current().unwrap();
+    };
+
+    let gl = match gl::GlType::default() {
+        gl::GlType::Gl => unsafe {
+            gl::GlFns::load_with(|symbol| gl_window.get_proc_address(symbol) as *const _)
+        },
+        gl::GlType::Gles => unsafe {
+            gl::GlesFns::load_with(|symbol| gl_window.get_proc_address(symbol) as *const _)
+        }
+    };
+
+    //println!("OpenGL version {}", gl.get_string(gl::VERSION));
+    //println!("Shader resource path: {:?}", res_path);
+
+    let (width, height) = gl_window.get_inner_size_pixels().unwrap();
+
+    let opts = webrender::RendererOptions {
+        //resource_override_path: res_path,
+        debug: true,
+        precache_shaders: true,
+        device_pixel_ratio: 1.0,
+        //window.hidpi_factor(),
+        ..webrender::RendererOptions::default()
+    };
+
+    let (mut renderer, sender) = webrender::renderer::Renderer::new(gl, opts, DeviceUintSize::new(width, height)).unwrap();
+
+    let api = sender.create_api();
+    api.set_root_pipeline(PipelineId(0, 0));
+
+    let notifier = Box::new(Notifier::new(events_loop.create_proxy()));
+    renderer.set_render_notifier(notifier);
+
+    let mut theme = Theme::new();
+
+    let mut epoch = Epoch(0);
+
+    let mut busy_rendering = AtomicBool::new(false);
+    let mut need_render = true;
+
+    let mut mouse = WorldPoint::zero();
+
+    local_self.lock().unwrap().render_context = Some(RenderContext {
+        event_loop_proxy: events_loop.create_proxy()
+    });
+
+    events_loop.run_forever(|event| {
+        let size = gl_window.get_inner_size_pixels().unwrap();
+        match event {
+            glutin::Event::Awakened => {
+                println!("Awakened");
+                renderer.update();
+                renderer.render(DeviceUintSize::new(size.0, size.1));
+                let _ = gl_window.swap_buffers().unwrap();
+                *busy_rendering.get_mut() = false;
+            }
+            glutin::Event::WindowEvent { event, .. } => match event {
+                glutin::WindowEvent::Closed => return glutin::ControlFlow::Break,
+                glutin::WindowEvent::Resized(w, h) => {
+                    gl_window.resize(w, h);
+                    need_render = true;
+                },
+                glutin::WindowEvent::MouseMoved { position: (x, y), .. } => {
+                    mouse = WorldPoint::new(x as f32, y as f32);
+                }
+                glutin::WindowEvent::MouseInput { button: glutin::MouseButton::Left, .. } => {
+                },
+                _ => (),
+            },
+            _ => ()
+        }
+
+        if let Some(ref mut context) = local_self.lock().unwrap().tree_context {
+            if context.dirty {
+                context.dirty = false;
+                need_render = true;
+            }
+        }
+
+        if need_render {
+            if busy_rendering.compare_and_swap(false, true, Ordering::Relaxed) == false {
+                println!("Was not busy rendering, so starting now...");
+                need_render = false;
+
+                let glsize = gl_window.get_inner_size().unwrap();
+                let layout_size = LayoutSize::new(glsize.0 as f32, glsize.1 as f32);
+
+                if let Some(ref mut context) = local_self.lock().unwrap().tree_context {
+                    generate_frame(&api, &layout_size, &epoch, &mut theme, &*context.tree);
+                }
+
+                epoch.0 = epoch.0 + 1;
+            }
+        }
+
+        glutin::ControlFlow::Continue
+    });
+
+    let _ = event_sender.send(Event::ApplicationClosed);
+}
+
+fn generate_frame(api: &RenderApi, layout_size: &LayoutSize, epoch: &Epoch, theme: &mut Theme, tree: &Component) {
+    let device_size = DeviceUintSize::new(layout_size.width as u32, layout_size.height as u32);
+    let root_background_color = ColorF::new(0.0, 0.7, 0.0, 1.0);
+    api.set_window_parameters(device_size, DeviceUintRect::new(DeviceUintPoint::zero(), device_size));
+    api.set_display_list(Some(root_background_color),
+                                 *epoch,
+                                 *layout_size,
+                                 build_display_list(&layout_size, theme, tree).finalize(),
+                                 true);
+    api.generate_frame(None);
+}
+
+fn build_display_list(layout_size: &LayoutSize, theme: &mut Theme, tree: &Component) -> DisplayListBuilder {
+    let mut builder = DisplayListBuilder::new(PipelineId(0, 0), *layout_size);
+
+    theme.update_layout(&tree, layout_size);
+    theme.build_display_list(&mut builder, &tree);
+
+    builder
 }

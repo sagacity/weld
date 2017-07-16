@@ -20,13 +20,16 @@ impl Theme {
     }
 
     pub fn update_layout(&mut self, root: &Component, size: &LayoutSize) {
+        // HACK: Throw away old layout_nodes first
+        self.layout_nodes = HashMap::new();
+
         self.update_layout_recursive(root);
         self.get_layout_node_mut(root).calculate_layout(size.width, size.height, layout::Direction::LTR);
     }
 
     fn update_layout_recursive(&mut self, node: &Component) {
         {
-            let mut layout_node = self.layout_nodes.entry(*node.id()).or_insert_with(|| RefCell::new(layout::Node::new()));
+            let layout_node = self.layout_nodes.entry(*node.id()).or_insert_with(|| RefCell::new(layout::Node::new()));
             layout_node.borrow_mut().apply_styles(node.styles());
         }
 

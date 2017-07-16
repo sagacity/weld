@@ -1,6 +1,7 @@
 use component::Component;
 use window::WebrenderWindow;
 use events::{Event, EventStream};
+use std::sync::Arc;
 
 pub struct Application {
     window: WebrenderWindow,
@@ -15,7 +16,10 @@ impl Application {
         }
     }
 
-    pub fn run(&self, root: Component) {
+    pub fn run(&mut self, root: Component) {
+        let tree = Arc::new(root);
+        self.window.update(tree.clone());
+
         let window_join_handle = self.window.start_thread(self.events.sender());
 
         loop {
