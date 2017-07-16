@@ -1,5 +1,5 @@
 use component::Component;
-use window::WebrenderWindow;
+use window::{Epoch, WebrenderWindow};
 use events::{Event, EventStream};
 use std::sync::Arc;
 
@@ -18,11 +18,13 @@ impl Application {
 
     pub fn run(&mut self, root: Component) {
         let tree = Arc::new(root);
-        self.window.update(tree.clone());
-
         let window_join_handle = self.window.start_thread(self.events.sender());
 
         loop {
+            let mut epoch = Epoch(0);
+            self.window.update(tree.clone(), &epoch);
+            epoch.0 = epoch.0 + 1;
+
             let event = self.events.receiver().recv().unwrap();
             info!("Received application event: {:?}", event);
             match event {

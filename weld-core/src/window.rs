@@ -11,6 +11,9 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 
+#[derive(Clone, Copy, PartialEq)]
+pub struct Epoch(pub u32);
+
 struct Notifier {
     proxy: glutin::EventsLoopProxy
 }
@@ -49,7 +52,8 @@ struct RenderContext {
 
 struct TreeContext {
     tree: Arc<Component>,
-    dirty: bool,
+    epoch: Epoch,
+    rendered_epoch: Epoch
 }
 
 impl WebrenderWindow {
@@ -70,13 +74,14 @@ impl WebrenderWindow {
         })
     }
 
-    pub fn update(&mut self, root: Arc<Component>) {
+    pub fn update(&mut self, root: Arc<Component>, epoch: &Epoch) {
         let mut inner = self.inner.lock().unwrap();
 
         // Replace the tree
         inner.tree_context = Some(TreeContext {
             tree: root,
-            dirty: true
+            epoch: (*epoch).clone(),
+            rendered_epoch: Epoch(<u32>::max_value())
         });
 
         // Notify the event loop
@@ -132,8 +137,6 @@ fn run_gl(local_self: Arc<Mutex<WebrenderWindowData>>, event_sender: Sender<Even
 
     let mut theme = Theme::new();
 
-    let mut epoch = Epoch(0);
-
     let mut busy_rendering = AtomicBool::new(false);
     let mut need_render = true;
 
@@ -163,6 +166,7 @@ fn run_gl(local_self: Arc<Mutex<WebrenderWindowData>>, event_sender: Sender<Even
                     mouse = WorldPoint::new(x as f32, y as f32);
                 }
                 glutin::WindowEvent::MouseInput { button: glutin::MouseButton::Left, .. } => {
+                    let _ = event_sender.send(Event::Pressed);
                 },
                 _ => (),
             },
@@ -170,8 +174,7 @@ fn run_gl(local_self: Arc<Mutex<WebrenderWindowData>>, event_sender: Sender<Even
         }
 
         if let Some(ref mut context) = local_self.lock().unwrap().tree_context {
-            if context.dirty {
-                context.dirty = false;
+            if context.rendered_epoch != context.epoch {
                 need_render = true;
             }
         }
@@ -185,10 +188,9 @@ fn run_gl(local_self: Arc<Mutex<WebrenderWindowData>>, event_sender: Sender<Even
                 let layout_size = LayoutSize::new(glsize.0 as f32, glsize.1 as f32);
 
                 if let Some(ref mut context) = local_self.lock().unwrap().tree_context {
-                    generate_frame(&api, &layout_size, &epoch, &mut theme, &*context.tree);
+                    generate_frame(&api, &layout_size, &context.epoch, &mut theme, &*context.tree);
+                    context.rendered_epoch = context.epoch;
                 }
-
-                epoch.0 = epoch.0 + 1;
             }
         }
 
@@ -203,7 +205,7 @@ fn generate_frame(api: &RenderApi, layout_size: &LayoutSize, epoch: &Epoch, them
     let root_background_color = ColorF::new(0.0, 0.7, 0.0, 1.0);
     api.set_window_parameters(device_size, DeviceUintRect::new(DeviceUintPoint::zero(), device_size));
     api.set_display_list(Some(root_background_color),
-                                 *epoch,
+                                 webrender::api::Epoch(epoch.0),
                                  *layout_size,
                                  build_display_list(&layout_size, theme, tree).finalize(),
                                  true);
