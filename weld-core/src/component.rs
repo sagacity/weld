@@ -6,6 +6,8 @@ use std::fmt;
 
 pub type ComponentId = ProcessUniqueId;
 
+pub type EventHandler = Box<Fn(&Event) + 'static + Send>;
+
 #[derive(Debug)]
 pub enum Type {
     Panel,
@@ -14,12 +16,20 @@ pub enum Type {
     Button
 }
 
+pub enum Configuration {
+    Style(FlexStyle),
+    Styles(Vec<FlexStyle>),
+    Child(Component),
+    Children(Vec<Component>),
+    Event(Box<Fn(&Event) + 'static + Send>)
+}
+
 pub struct Component {
     id: ComponentId,
     component_type: Type,
     styles: Vec<FlexStyle>,
     children: Vec<Component>,
-    event_handler: Option<Box<Fn(&Event) + 'static + Send>>,
+    event_handlers: Vec<EventHandler>,
     data_bag: DataBag,
 }
 
@@ -30,17 +40,13 @@ impl fmt::Debug for Component {
 }
 
 impl Component {
-    pub fn new<S, C>(t: Type, styles: S, children: C, events: Option<Box<Fn(&Event) + 'static + Send>>) -> Component where S: IntoIterator<Item=FlexStyle>, C: IntoIterator<Item=Component> {
-        let mut s = Vec::new();
-        s.extend(styles);
-        let mut c = Vec::new();
-        c.extend(children);
+    pub fn new(t: Type, styles: Vec<FlexStyle>, children: Vec<Component>, event_handlers: Vec<EventHandler>) -> Component {
         Component {
             id: ProcessUniqueId::new(),
             component_type: t,
-            styles: s,
-            children: c,
-            event_handler: events,
+            styles: styles,
+            children: children,
+            event_handlers: event_handlers,
             data_bag: DataBag::new(),
         }
     }
@@ -74,7 +80,7 @@ impl Component {
     }
 
     pub fn handle(&self, event: &Event) {
-        if let Some(ref handler) = self.event_handler {
+        for handler in self.event_handlers.iter() {
             handler(event);
         }
     }
@@ -94,24 +100,36 @@ fn find_recursive<'a>(node: &'a Component, id: &ComponentId) -> Option<&'a Compo
     None
 }
 
-pub fn panel<S, C>(styles: S, children: C) -> Component where S: IntoIterator<Item=FlexStyle>, C: IntoIterator<Item=Component> {
-    Component::new(Type::Panel, styles, children, None)
-}
+pub fn panel<C>(configurations: C) -> Component where C: IntoIterator<Item=Configuration> {
+    let mut styles = Vec::new();
+    let mut children = Vec::new();
+    let mut event_handlers = Vec::new();
 
-pub fn panel2<S, C, E>(styles: S, children: C, events: E) -> Component where S: IntoIterator<Item=FlexStyle>, C: IntoIterator<Item=Component>, E: Fn(&Event) + Send + 'static {
-    Component::new(Type::Panel, styles, children, Some(Box::new(events)))
+    for config in configurations {
+        match config {
+            Configuration::Style(s) => styles.push(s),
+            Configuration::Styles(s) => styles.extend(s),
+            Configuration::Child(c) => children.push(c),
+            Configuration::Children(c) => children.extend(c),
+            Configuration::Event(e) => event_handlers.push(e),
+            _ => {}
+        }
+    }
+
+    Component::new(Type::Panel, styles, children, event_handlers)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::Configuration::*;
 
     #[test]
-    fn can_create_tree() {
-        let tree = panel(vec![], vec![
-            panel(vec![], vec![]),
-            panel(vec![], vec![]),
-        ]);
+    fn can_create_configuration_tree() {
+        let tree = panel(vec![Children(vec![
+            panel(vec![]),
+            panel(vec![])
+        ])]);
 
         assert_eq!(tree.children().len(), 2);
     }
