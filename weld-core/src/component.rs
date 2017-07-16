@@ -21,10 +21,6 @@ pub struct Component {
     data_bag: DataBag,
 }
 
-unsafe impl Send for Component {}
-
-unsafe impl Sync for Component {}
-
 impl Component {
     pub fn new<S, C>(t: Type, styles: S, children: C) -> Component where S: IntoIterator<Item=FlexStyle>, C: IntoIterator<Item=Component> {
         let mut s = Vec::new();

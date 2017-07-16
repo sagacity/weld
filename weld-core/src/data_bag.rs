@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct DataBag {
-    data: HashMap<TypeId, Box<Any>>,
+    data: HashMap<TypeId, Box<Any + Send>>,
 }
 
 impl DataBag {
@@ -11,7 +11,7 @@ impl DataBag {
         DataBag { data: HashMap::new() }
     }
 
-    pub fn get<T: 'static>(&self) -> Option<&T> {
+    pub fn get<T: Send + 'static>(&self) -> Option<&T> {
         match self.data.get(&TypeId::of::<T>()) {
             Some(value) => {
                 let any = value.as_ref();
@@ -21,7 +21,7 @@ impl DataBag {
         }
     }
 
-    pub fn put<T: 'static>(&mut self, data: T) {
+    pub fn put<T: Send + 'static>(&mut self, data: T) {
         self.data.insert(TypeId::of::<T>(), Box::new(data));
     }
 }
