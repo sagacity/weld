@@ -14,6 +14,14 @@ use std::sync::mpsc::Sender;
 #[derive(Clone, Copy, PartialEq)]
 pub struct Epoch(pub u32);
 
+impl Epoch {
+    pub fn next(&mut self) -> Self {
+        let val = self.0;
+        self.0 = self.0 + 1;
+        Epoch(val)
+    }
+}
+
 struct Notifier {
     proxy: glutin::EventsLoopProxy
 }
@@ -51,7 +59,7 @@ struct RenderContext {
 }
 
 struct TreeContext {
-    tree: Arc<Component>,
+    tree: Arc<Mutex<Component>>,
     epoch: Epoch,
     rendered_epoch: Epoch
 }
@@ -74,7 +82,7 @@ impl WebrenderWindow {
         })
     }
 
-    pub fn update(&mut self, root: Arc<Component>, epoch: &Epoch) {
+    pub fn update(&mut self, root: Arc<Mutex<Component>>, epoch: &Epoch) {
         let mut inner = self.inner.lock().unwrap();
 
         // Replace the tree
@@ -150,7 +158,7 @@ fn run_gl(local_self: Arc<Mutex<WebrenderWindowData>>, event_sender: Sender<Even
         let size = gl_window.get_inner_size_pixels().unwrap();
         match event {
             glutin::Event::Awakened => {
-                println!("Awakened");
+                debug!("Awakened");
                 renderer.update();
                 renderer.render(DeviceUintSize::new(size.0, size.1));
                 let _ = gl_window.swap_buffers().unwrap();
@@ -181,14 +189,14 @@ fn run_gl(local_self: Arc<Mutex<WebrenderWindowData>>, event_sender: Sender<Even
 
         if need_render {
             if busy_rendering.compare_and_swap(false, true, Ordering::Relaxed) == false {
-                println!("Was not busy rendering, so starting now...");
+                debug!("Was not busy rendering, so starting now...");
                 need_render = false;
 
                 let glsize = gl_window.get_inner_size().unwrap();
                 let layout_size = LayoutSize::new(glsize.0 as f32, glsize.1 as f32);
 
                 if let Some(ref mut context) = local_self.lock().unwrap().tree_context {
-                    generate_frame(&api, &layout_size, &context.epoch, &mut theme, &*context.tree);
+                    generate_frame(&api, &layout_size, &context.epoch, &mut theme, &context.tree.lock().unwrap());
                     context.rendered_epoch = context.epoch;
                 }
             }

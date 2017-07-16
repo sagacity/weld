@@ -12,6 +12,7 @@ pub enum Type {
     Button
 }
 
+#[derive(Debug)]
 pub struct Component {
     id: ComponentId,
     component_type: Type,
@@ -53,6 +54,10 @@ impl Component {
 
     pub fn children(&self) -> &Vec<Component> {
         &self.children
+    }
+
+    pub fn children_mut(&mut self) -> &mut Vec<Component> {
+        &mut self.children
     }
 
     pub fn styles(&self) -> &Vec<FlexStyle> {

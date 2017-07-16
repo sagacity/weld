@@ -58,8 +58,8 @@ impl Theme {
             LayoutPoint::new(layout.left, layout.top),
             LayoutSize::new(layout.width, layout.height)
         );
-        println!("layout: {:?}", layout);
-        println!("bounds: {:?}", bounds);
+        debug!("layout: {:?}", layout);
+        debug!("bounds: {:?}", bounds);
 
         builder.push_rect(bounds, None, color);
 

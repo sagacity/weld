@@ -4,7 +4,7 @@ extern crate pretty_env_logger;
 
 use weld_core::application::Application;
 use weld_core::component::panel;
-use weld_core::layout::{FlexDirection, Percent, Point};
+use weld_core::layout::{FlexDirection, Percent, Point, Wrap};
 use weld_core::layout::FlexStyle::*;
 use weld_core::layout::Align::*;
 
@@ -18,7 +18,8 @@ fn main() {
         Height(100.percent()),
         FlexDirection(FlexDirection::Row),
         Padding(25.point()),
-        AlignItems(Center)
+        AlignItems(FlexStart),
+        FlexWrap(Wrap::Wrap)
     ], vec![
         panel(vec![
             Width(100.point()),
