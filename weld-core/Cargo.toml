@@ -10,6 +10,8 @@ euclid = "0.15.1"
 snowflake = "1.2"
 rand = "0.3"
 log = "0.3"
+futures = "0.1.14"
+tokio-core = "0.1.4"
 
 [dependencies.webrender]
 git = "https://github.com/servo/webrender"

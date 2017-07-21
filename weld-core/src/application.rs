@@ -1,49 +1,45 @@
 use component::Component;
-use window::{Epoch, WebrenderWindow};
-use events::{Event, EventStream};
+use window::{Epoch, RendererHandle, EventStream, WebrenderWindow};
+use events::Event;
 use std::sync::{Arc, Mutex};
+use futures::Stream;
+use tokio_core::reactor::Core;
 
 pub struct Application {
-    window: WebrenderWindow,
-    events: EventStream
+    window: (RendererHandle, EventStream)
 }
 
 impl Application {
     pub fn new(title: &'static str) -> Application {
         Application {
-            window: WebrenderWindow::new(title),
-            events: EventStream::new()
+            window: WebrenderWindow::new(title)
         }
     }
 
-    pub fn run(&mut self, root: Component) {
-        let mut epoch = Epoch(0);
+    pub fn run(self, root: Component) {
+        let epoch = Epoch(0);
         let tree = Arc::new(Mutex::new(root));
 
-        let window_join_handle = self.window.start_thread(self.events.sender());
+        let (mut renderer, event_stream) = self.window;
+        renderer.set_tree(tree.clone());
+        renderer.render();
 
-        loop {
-            self.window.update(tree.clone(), &epoch.next());
-
-            let event = self.events.receiver().recv().unwrap();
-            info!("Received application event: {:?}", event);
+        let event_logger = event_stream.for_each(|event| {
+            //println!("event: {:?}", event);
             match event {
-                Event::ApplicationClosed => break,
-                Event::Pressed(maybe_id) => {
-                    if let Some(ref id) = maybe_id {
-                        if let Some(ref component) = tree.lock().unwrap().find(id) {
-                            component.handle(&event);
-                        }
-                    }
-                }
-                _ => ()
+                Event::NotifyRenderComplete => {
+                    renderer.update();
+                    Ok(())
+                },
+                Event::ApplicationClosed => {
+                    //renderer.stop();
+                    Err(())
+                },
+                _ => Ok(())
             }
-        }
+        });
 
-        let _ = window_join_handle.join();
-    }
-
-    pub fn window(&self) -> &WebrenderWindow {
-        &self.window
+        let mut core = Core::new().unwrap();
+        let _ = core.run(event_logger);
     }
 }

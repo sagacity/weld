@@ -111,8 +111,7 @@ pub fn panel<C>(configurations: C) -> Component where C: IntoIterator<Item=Confi
             Configuration::Styles(s) => styles.extend(s),
             Configuration::Child(c) => children.push(c),
             Configuration::Children(c) => children.extend(c),
-            Configuration::Event(e) => event_handlers.push(e),
-            _ => {}
+            Configuration::Event(e) => event_handlers.push(e)
         }
     }
 

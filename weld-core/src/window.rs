@@ -3,13 +3,14 @@ use glutin;
 use glutin::GlContext;
 use webrender;
 use webrender::api::*;
-use component::Component;
-use events::Event;
 use layout_context::LayoutContext;
-use std::thread;
+use futures::{Async, Poll, Stream};
+use futures::task;
+use component::Component;
+use events;
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Sender;
+use std::sync::mpsc;
+use std::collections::VecDeque;
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct Epoch(pub u32);
@@ -23,205 +24,187 @@ impl Epoch {
 }
 
 struct Notifier {
-    proxy: glutin::EventsLoopProxy
-}
-
-impl Notifier {
-    fn new(proxy: glutin::EventsLoopProxy) -> Notifier {
-        Notifier { proxy: proxy }
-    }
+    window_events_tx: mpsc::Sender<events::Event>
 }
 
 impl RenderNotifier for Notifier {
     fn new_frame_ready(&mut self) {
+        info!("new_frame_ready");
         #[cfg(not(target_os = "android"))]
-        let _ = self.proxy.wakeup().unwrap();
+        self.window_events_tx.send(events::Event::NotifyRenderComplete).unwrap();
     }
 
     fn new_scroll_frame_ready(&mut self, _composite_needed: bool) {
+        info!("new_scroll_frame_ready");
         #[cfg(not(target_os = "android"))]
-        let _ = self.proxy.wakeup().unwrap();
+        self.window_events_tx.send(events::Event::NotifyRenderComplete).unwrap();
     }
 }
 
-pub struct WebrenderWindow {
-    inner: Arc<Mutex<WebrenderWindowData>>
-}
-
-pub struct WebrenderWindowData {
-    title: &'static str,
-    render_context: Option<RenderContext>,
-    tree_context: Option<TreeContext>
-}
-
-struct RenderContext {
-    event_loop_proxy: glutin::EventsLoopProxy,
-}
-
-struct TreeContext {
-    tree: Arc<Mutex<Component>>,
+pub struct RendererHandle {
     epoch: Epoch,
-    rendered_epoch: Epoch
+    layout_context: LayoutContext,
+    tree: Option<Arc<Mutex<Component>>>,
+    window_size: (u32, u32),
+    gl_window: glutin::GlWindow,
+    renderer: webrender::renderer::Renderer,
+    api: webrender::api::RenderApi,
 }
+
+impl RendererHandle {
+    pub fn update(&mut self) {
+        self.renderer.update();
+        self.renderer.render(DeviceUintSize::new(self.window_size.0, self.window_size.1));
+        self.gl_window.swap_buffers().unwrap();
+    }
+
+    pub fn render(&mut self) {
+        if let Some(ref tree) = self.tree {
+            info!("render()");
+            let layout_size = LayoutSize::new(self.window_size.0 as f32, self.window_size.1 as f32);
+
+            generate_frame(&self.api, &layout_size, &self.epoch.next(), &mut self.layout_context, &tree.lock().unwrap());
+            //context.rendered_epoch = context.epoch;
+        }
+    }
+
+    pub fn set_tree(&mut self, tree: Arc<Mutex<Component>>) {
+        self.tree = Some(tree);
+    }
+}
+
+pub struct WebrenderWindow;
 
 impl WebrenderWindow {
-    pub fn new(title: &'static str) -> WebrenderWindow {
-        WebrenderWindow {
-            inner: Arc::new(Mutex::new(WebrenderWindowData {
-                title,
-                render_context: None,
-                tree_context: None
-            }))
-        }
-    }
+    pub fn new(title: &'static str) -> (RendererHandle, EventStream) {
+        let (window_events_tx, window_events_rx) = mpsc::channel::<events::Event>();
 
-    pub fn start_thread(&mut self, event_sender: Sender<Event>) -> thread::JoinHandle<()> {
-        let local_self = self.inner.clone();
-        thread::spawn(move || {
-            run_gl(local_self, event_sender);
-        })
-    }
+        let window = glutin::WindowBuilder::new()
+            .with_title(title)
+            .with_multitouch();
 
-    pub fn update(&mut self, root: Arc<Mutex<Component>>, epoch: &Epoch) {
-        let mut inner = self.inner.lock().unwrap();
+        let glutin_events = glutin::EventsLoop::new();
 
-        // Replace the tree
-        inner.tree_context = Some(TreeContext {
-            tree: root,
-            epoch: (*epoch).clone(),
-            rendered_epoch: Epoch(<u32>::max_value())
+        let context = glutin::ContextBuilder::new().with_vsync(false);
+        let gl_window = glutin::GlWindow::new(window, context, &glutin_events).unwrap();
+
+        unsafe {
+            let _ = gl_window.make_current().unwrap();
+        };
+
+        let gl = match gl::GlType::default() {
+            gl::GlType::Gl => unsafe {
+                gl::GlFns::load_with(|symbol| gl_window.get_proc_address(symbol) as *const _)
+            },
+            gl::GlType::Gles => unsafe {
+                gl::GlesFns::load_with(|symbol| gl_window.get_proc_address(symbol) as *const _)
+            }
+        };
+
+        //println!("OpenGL version {}", gl.get_string(gl::VERSION));
+        //println!("Shader resource path: {:?}", res_path);
+
+        let (width, height) = gl_window.get_inner_size_pixels().unwrap();
+
+        let opts = webrender::RendererOptions {
+            //resource_override_path: res_path,
+            debug: true,
+            precache_shaders: true,
+            device_pixel_ratio: 1.0,
+            //window.hidpi_factor(),
+            ..webrender::RendererOptions::default()
+        };
+
+        let (renderer, sender) = webrender::renderer::Renderer::new(gl, opts, DeviceUintSize::new(width, height)).unwrap();
+
+        let api = sender.create_api();
+        api.set_root_pipeline(PipelineId(0, 0));
+
+        let notifier = Box::new(Notifier {
+            window_events_tx: window_events_tx.clone()
         });
+        renderer.set_render_notifier(notifier);
 
-        // Notify the event loop
-        if let Some(ref context) = inner.render_context {
-            let _ = context.event_loop_proxy.wakeup().unwrap();
-        }
+        (RendererHandle {
+            epoch: Epoch(0),
+            layout_context: LayoutContext::new(),
+            tree: None,
+            window_size: (width, height),
+            gl_window,
+            renderer,
+            api,
+        }, EventStream {
+            glutin_events,
+            window_events: window_events_rx,
+            events: VecDeque::new(),
+        })
     }
 }
 
-fn run_gl(local_self: Arc<Mutex<WebrenderWindowData>>, event_sender: Sender<Event>) {
-    let mut events_loop = glutin::EventsLoop::new();
-    let window = glutin::WindowBuilder::new()
-        .with_title(local_self.lock().unwrap().title)
-        .with_multitouch();
+pub struct EventStream {
+    glutin_events: glutin::EventsLoop,
+    window_events: mpsc::Receiver<events::Event>,
+    events: VecDeque<events::Event>,
+}
 
-    let context = glutin::ContextBuilder::new().with_vsync(false);
-    let gl_window = glutin::GlWindow::new(window, context, &events_loop).unwrap();
+impl Stream for EventStream {
+    type Item = events::Event;
+    type Error = ();
 
-    unsafe {
-        let _ = gl_window.make_current().unwrap();
-    };
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        let mut polled_events = Vec::new();
 
-    let gl = match gl::GlType::default() {
-        gl::GlType::Gl => unsafe {
-            gl::GlFns::load_with(|symbol| gl_window.get_proc_address(symbol) as *const _)
-        },
-        gl::GlType::Gles => unsafe {
-            gl::GlesFns::load_with(|symbol| gl_window.get_proc_address(symbol) as *const _)
-        }
-    };
+        // Grab all Glutin events
+        self.glutin_events.poll_events(|event| {
+            let weld_event = match event {
+                glutin::Event::WindowEvent { event, .. } => match event {
+                    glutin::WindowEvent::Closed => events::Event::WindowClosed,
+                    _ => events::Event::GlutinWindowEvent(event)
+                },
+                _ => events::Event::GlutinEvent(event)
+            };
 
-    //println!("OpenGL version {}", gl.get_string(gl::VERSION));
-    //println!("Shader resource path: {:?}", res_path);
+            polled_events.push(weld_event);
+        });
+        self.events.extend(polled_events);
 
-    let (width, height) = gl_window.get_inner_size_pixels().unwrap();
-
-    let opts = webrender::RendererOptions {
-        //resource_override_path: res_path,
-        debug: true,
-        precache_shaders: true,
-        device_pixel_ratio: 1.0,
-        //window.hidpi_factor(),
-        ..webrender::RendererOptions::default()
-    };
-
-    let (mut renderer, sender) = webrender::renderer::Renderer::new(gl, opts, DeviceUintSize::new(width, height)).unwrap();
-
-    let api = sender.create_api();
-    api.set_root_pipeline(PipelineId(0, 0));
-
-    let notifier = Box::new(Notifier::new(events_loop.create_proxy()));
-    renderer.set_render_notifier(notifier);
-
-    let mut layout_context = LayoutContext::new();
-
-    let mut busy_rendering = AtomicBool::new(false);
-    let mut need_render = true;
-
-    let mut mouse = WorldPoint::zero();
-
-    local_self.lock().unwrap().render_context = Some(RenderContext {
-        event_loop_proxy: events_loop.create_proxy()
-    });
-
-    events_loop.run_forever(|event| {
-        let size = gl_window.get_inner_size_pixels().unwrap();
-        match event {
-            glutin::Event::Awakened => {
-                debug!("Awakened");
-                renderer.update();
-                renderer.render(DeviceUintSize::new(size.0, size.1));
-                let _ = gl_window.swap_buffers().unwrap();
-                *busy_rendering.get_mut() = false;
+        // Grab all events sent by notifier
+        loop {
+            match self.window_events.try_recv() {
+                Ok(event) => self.events.push_back(event),
+                Err(_) => break
             }
-            glutin::Event::WindowEvent { event, .. } => match event {
-                glutin::WindowEvent::Closed => return glutin::ControlFlow::Break,
-                glutin::WindowEvent::Resized(w, h) => {
-                    gl_window.resize(w, h);
-                    need_render = true;
-                },
-                glutin::WindowEvent::MouseMoved { position: (x, y), .. } => {
-                    mouse = WorldPoint::new(x as f32, y as f32);
+        }
+
+        // Publish in stream
+        match self.events.pop_front() {
+            Some(event) => {
+                match event {
+                    events::Event::WindowClosed => Ok(Async::Ready(None)),
+                    _ => Ok(Async::Ready(Some(event)))
                 }
-                glutin::WindowEvent::MouseInput { button: glutin::MouseButton::Left, state: glutin::ElementState::Pressed, .. } => {
-                    if let Some(ref mut context) = local_self.lock().unwrap().tree_context {
-                        let node = layout_context
-                            .find_node_at(mouse, &context.tree.lock().unwrap())
-                            .map(|node| *node.id());
-                        let _ = event_sender.send(Event::Pressed(node));
-                    }
-                },
-                _ => (),
             },
-            _ => ()
-        }
+            None => {
+                // No messages were polled, notify the task so we will be re-polled in a little while
+                let t = task::current();
+                t.notify();
 
-        if let Some(ref mut context) = local_self.lock().unwrap().tree_context {
-            if context.rendered_epoch != context.epoch {
-                need_render = true;
+                Ok(Async::NotReady)
             }
         }
-
-        if need_render {
-            if busy_rendering.compare_and_swap(false, true, Ordering::Relaxed) == false {
-                debug!("Was not busy rendering, so starting now...");
-                need_render = false;
-
-                let glsize = gl_window.get_inner_size().unwrap();
-                let layout_size = LayoutSize::new(glsize.0 as f32, glsize.1 as f32);
-
-                if let Some(ref mut context) = local_self.lock().unwrap().tree_context {
-                    generate_frame(&api, &layout_size, &context.epoch, &mut layout_context, &context.tree.lock().unwrap());
-                    context.rendered_epoch = context.epoch;
-                }
-            }
-        }
-
-        glutin::ControlFlow::Continue
-    });
-
-    let _ = event_sender.send(Event::ApplicationClosed);
+    }
 }
 
 fn generate_frame(api: &RenderApi, layout_size: &LayoutSize, epoch: &Epoch, layout_context: &mut LayoutContext, tree: &Component) {
+    info!("generate_frame, epoch: {}", epoch.0);
     let device_size = DeviceUintSize::new(layout_size.width as u32, layout_size.height as u32);
     let root_background_color = ColorF::new(0.0, 0.7, 0.0, 1.0);
     api.set_window_parameters(device_size, DeviceUintRect::new(DeviceUintPoint::zero(), device_size));
     api.set_display_list(Some(root_background_color),
-                                 webrender::api::Epoch(epoch.0),
-                                 *layout_size,
-                                 build_display_list(&layout_size, layout_context, tree).finalize(),
-                                 true);
+                         webrender::api::Epoch(epoch.0),
+                         *layout_size,
+                         build_display_list(&layout_size, layout_context, tree).finalize(),
+                         true);
     api.generate_frame(None);
 }
 

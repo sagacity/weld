@@ -23,14 +23,14 @@ fn main() {
             AlignItems(FlexStart),
             FlexWrap(Wrap::Wrap)
         ]),
-        Event(Box::new(|event| { println!("Clicked the background, eh?"); })),
+        //Event(Box::new(|event| { println!("Clicked the background, eh?"); })),
         Child(
             panel(vec![
                 Styles(vec![
                     Width(100.point()),
                     Height(32.point()),
                 ]),
-                Event(Box::new(|event| { println!("Thanks for clicking the small button"); }))
+                //Event(Box::new(|event| { println!("Thanks for clicking the small button"); }))
             ])
         )
     ]);

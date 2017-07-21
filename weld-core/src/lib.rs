@@ -6,6 +6,8 @@ extern crate log;
 extern crate snowflake;
 extern crate webrender;
 extern crate rand;
+extern crate tokio_core;
+extern crate futures;
 
 pub extern crate yoga;
 
