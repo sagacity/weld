@@ -3,10 +3,12 @@ use events::Event;
 use snowflake::ProcessUniqueId;
 use layout::FlexStyle;
 use std::fmt;
+use futures::stream::BoxStream;
+use std::marker::PhantomData;
 
 pub type ComponentId = ProcessUniqueId;
 
-pub type EventHandler = Box<Fn(&Event) + 'static + Send>;
+//pub type EventHandler = Fn() -> Stream + 'static + Send;
 
 #[derive(Debug)]
 pub enum Type {
@@ -21,7 +23,7 @@ pub enum Configuration {
     Styles(Vec<FlexStyle>),
     Child(Component),
     Children(Vec<Component>),
-    Event(Box<Fn(&Event) + 'static + Send>)
+    //Event(Box<EventHandler>)
 }
 
 pub struct Component {
@@ -29,7 +31,7 @@ pub struct Component {
     component_type: Type,
     styles: Vec<FlexStyle>,
     children: Vec<Component>,
-    event_handlers: Vec<EventHandler>,
+    //event_handlers: Vec<Box<EventHandler>>,
     data_bag: DataBag,
 }
 
@@ -40,13 +42,13 @@ impl fmt::Debug for Component {
 }
 
 impl Component {
-    pub fn new(t: Type, styles: Vec<FlexStyle>, children: Vec<Component>, event_handlers: Vec<EventHandler>) -> Component {
+    pub fn new(t: Type, styles: Vec<FlexStyle>, children: Vec<Component>/*, event_handlers: Vec<Box<EventHandler>>*/) -> Component {
         Component {
             id: ProcessUniqueId::new(),
             component_type: t,
             styles: styles,
             children: children,
-            event_handlers: event_handlers,
+            //event_handlers: event_handlers,
             data_bag: DataBag::new(),
         }
     }
@@ -80,9 +82,9 @@ impl Component {
     }
 
     pub fn handle(&self, event: &Event) {
-        for handler in self.event_handlers.iter() {
+        /*for handler in self.event_handlers.iter() {
             handler(event);
-        }
+        }*/
     }
 }
 
@@ -100,10 +102,63 @@ fn find_recursive<'a>(node: &'a Component, id: &ComponentId) -> Option<&'a Compo
     None
 }
 
-pub fn panel<C>(configurations: C) -> Component where C: IntoIterator<Item=Configuration> {
+pub struct BuildContext {}
+
+pub trait State {
+    type Data;
+
+    fn build(&self, context: BuildContext) -> Component;
+    fn data(&self) -> &Self::Data;
+
+    fn panel<C>(configurations: C) -> PanelBuilder<Self> where Self: Sized, C: IntoIterator<Item=Configuration> {
+        let mut styles = Vec::new();
+        let mut children = Vec::new();
+
+        //    let mut event_handlers: Vec<Data> = Vec::new();
+
+        for config in configurations {
+            match config {
+                Configuration::Style(s) => styles.push(s),
+                Configuration::Styles(s) => styles.extend(s),
+                Configuration::Child(c) => children.push(c),
+                Configuration::Children(c) => children.extend(c),
+                //Configuration::Event(e) => event_handlers.push(e)
+            }
+        }
+
+        PanelBuilder {
+            component: Component::new(Type::Panel, styles, children/*, event_handlers*/),
+            marker: PhantomData
+        }
+    }
+
+}
+
+pub struct PanelBuilder<S: State> {
+    component: Component,
+    marker: PhantomData<S>
+}
+
+pub trait PressedHandler<S: State> {
+    fn pressed(self, handler: &Fn(&S::Data) -> BoxStream<S::Data, ()>) -> Self where Self: Sized {
+        self
+    }
+}
+
+impl<S: State> PressedHandler<S> for PanelBuilder<S> {}
+
+impl<S> Into<Component> for PanelBuilder<S> where S: State {
+    fn into(self) -> Component {
+        self.component
+    }
+}
+/*
+pub fn panel<C>(configurations: C) -> PanelBuilder
+    where C: IntoIterator<Item=Configuration> {
     let mut styles = Vec::new();
     let mut children = Vec::new();
-    let mut event_handlers = Vec::new();
+
+//    let mut event_handlers: Vec<Data> = Vec::new();
 
     for config in configurations {
         match config {
@@ -111,13 +166,16 @@ pub fn panel<C>(configurations: C) -> Component where C: IntoIterator<Item=Confi
             Configuration::Styles(s) => styles.extend(s),
             Configuration::Child(c) => children.push(c),
             Configuration::Children(c) => children.extend(c),
-            Configuration::Event(e) => event_handlers.push(e)
+            //Configuration::Event(e) => event_handlers.push(e)
         }
     }
 
-    Component::new(Type::Panel, styles, children, event_handlers)
+    PanelBuilder {
+        component: Component::new(Type::Panel, styles, children/*, event_handlers*/)
+    }
 }
-
+*/
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -125,11 +183,11 @@ mod tests {
 
     #[test]
     fn can_create_configuration_tree() {
-        let tree = panel(vec![Children(vec![
-            panel(vec![]),
-            panel(vec![])
+        let tree = panel(None, vec![Children(vec![
+            panel(None, vec![]),
+            panel(None, vec![])
         ])]);
 
         assert_eq!(tree.children().len(), 2);
     }
-}
+}*/
