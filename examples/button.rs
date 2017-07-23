@@ -1,13 +1,12 @@
 extern crate weld;
-extern crate weld_core;
 extern crate pretty_env_logger;
 
-use weld_core::application::Application;
-use weld_core::component::panel;
-use weld_core::component::Configuration::*;
-use weld_core::layout::{FlexDirection, Percent, Point, Wrap};
-use weld_core::layout::FlexStyle::*;
-use weld_core::layout::Align::*;
+use weld::application::Application;
+use weld::component::panel;
+use weld::component::Configuration::*;
+use weld::layout::{FlexDirection, Percent, Point, Wrap};
+use weld::layout::FlexStyle::*;
+use weld::layout::Align::*;
 
 fn main() {
     pretty_env_logger::init().unwrap();

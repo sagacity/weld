@@ -1,1 +1,0 @@
-extern crate weld_core;

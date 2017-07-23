@@ -1,8 +1,23 @@
-[workspace]
-members = [
-    "./weld",
-    "./weld-core"
-]
+[package]
+name = "weld"
+version = "0.1.0"
+authors = ["Roy Jacobs <roy.jacobs@gmail.com>"]
 
-[profile.release]
-debug = true
+[dependencies]
+gleam = "0.4.7"
+glutin = "0.9.0"
+euclid = "0.15.1"
+snowflake = "1.2"
+rand = "0.3"
+log = "0.3"
+futures = "0.1.14"
+tokio-core = "0.1.4"
+
+[dependencies.webrender]
+git = "https://github.com/servo/webrender"
+
+[dependencies.yoga]
+git = "https://github.com/bschwind/yoga-rs"
+
+[dev-dependencies]
+pretty_env_logger = "0.1"
