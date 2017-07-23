@@ -35,7 +35,7 @@ pub struct Component {
 
 impl fmt::Debug for Component {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Component {{ id: {} }}", self.id)
+        write!(f, "{:?} {{ id: {} }}", self.component_type, self.id)
     }
 }
 

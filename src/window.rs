@@ -8,6 +8,8 @@ use futures::{Async, Poll, Stream};
 use futures::task;
 use component::Component;
 use events;
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
 use std::collections::VecDeque;
@@ -43,7 +45,7 @@ impl RenderNotifier for Notifier {
 
 pub struct RendererHandle {
     epoch: Epoch,
-    layout_context: LayoutContext,
+    layout_context: Rc<RefCell<LayoutContext>>,
     tree: Option<Arc<Mutex<Component>>>,
     window_size: (u32, u32),
     gl_window: glutin::GlWindow,
@@ -63,7 +65,7 @@ impl RendererHandle {
             info!("render()");
             let layout_size = LayoutSize::new(self.window_size.0 as f32, self.window_size.1 as f32);
 
-            generate_frame(&self.api, &layout_size, &self.epoch.next(), &mut self.layout_context, &tree.lock().unwrap());
+            generate_frame(&self.api, &layout_size, &self.epoch.next(), &mut self.layout_context.borrow_mut(), &tree.lock().unwrap());
             //context.rendered_epoch = context.epoch;
         }
     }
@@ -76,7 +78,7 @@ impl RendererHandle {
 pub struct WebrenderWindow;
 
 impl WebrenderWindow {
-    pub fn new(title: &'static str) -> (RendererHandle, EventStream) {
+    pub fn new(title: &'static str, layout_context: Rc<RefCell<LayoutContext>>) -> (RendererHandle, EventStream) {
         let (window_events_tx, window_events_rx) = mpsc::channel::<events::Event>();
 
         let window = glutin::WindowBuilder::new()
@@ -127,7 +129,7 @@ impl WebrenderWindow {
 
         (RendererHandle {
             epoch: Epoch(0),
-            layout_context: LayoutContext::new(),
+            layout_context,
             tree: None,
             window_size: (width, height),
             gl_window,
@@ -137,6 +139,7 @@ impl WebrenderWindow {
             glutin_events,
             window_events: window_events_rx,
             events: VecDeque::new(),
+            mouse: WorldPoint::zero()
         })
     }
 }
@@ -145,6 +148,7 @@ pub struct EventStream {
     glutin_events: glutin::EventsLoop,
     window_events: mpsc::Receiver<events::Event>,
     events: VecDeque<events::Event>,
+    mouse: WorldPoint,
 }
 
 impl Stream for EventStream {
@@ -155,10 +159,21 @@ impl Stream for EventStream {
         let mut polled_events = Vec::new();
 
         // Grab all Glutin events
+        let mut mouse: WorldPoint = self.mouse;
         self.glutin_events.poll_events(|event| {
             let weld_event = match event {
                 glutin::Event::WindowEvent { event, .. } => match event {
                     glutin::WindowEvent::Closed => events::Event::WindowClosed,
+                    glutin::WindowEvent::MouseMoved { position: (x, y), .. } => {
+                        mouse = WorldPoint::new(x as f32, y as f32);
+                        events::Event::GlutinWindowEvent(event)
+                    },
+                    glutin::WindowEvent::MouseInput { button: glutin::MouseButton::Left, state: glutin::ElementState::Pressed, .. } => {
+                        events::Event::Interaction(events::Interaction::Pressed(mouse))
+                    },
+                    glutin::WindowEvent::MouseInput { button: glutin::MouseButton::Left, state: glutin::ElementState::Released, .. } => {
+                        events::Event::Interaction(events::Interaction::Released(mouse))
+                    },
                     _ => events::Event::GlutinWindowEvent(event)
                 },
                 _ => events::Event::GlutinEvent(event)
@@ -166,6 +181,7 @@ impl Stream for EventStream {
 
             polled_events.push(weld_event);
         });
+        self.mouse = mouse;
         self.events.extend(polled_events);
 
         // Grab all events sent by notifier

@@ -11,7 +11,7 @@ use weld::layout::Align::*;
 fn main() {
     pretty_env_logger::init().unwrap();
 
-    let mut app = Application::new("Demo");
+    let app = Application::new("Demo");
 
     let root = panel(vec![
         Styles(vec![
