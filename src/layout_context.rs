@@ -1,5 +1,5 @@
 use webrender::api::*;
-use model::{Component, ComponentId};
+use model::{Component, ComponentId, RenderContext, RenderElement};
 use std::collections::HashMap;
 use std::cell::{Ref, RefMut, RefCell};
 use layout;
@@ -44,27 +44,18 @@ impl LayoutContext {
     }
 
     pub fn build_display_list(&self, builder: &mut DisplayListBuilder, root: &Component) {
-        self.build_display_list_recursive(builder, root);
-    }
+        let mut elements = Vec::new();
+        {
+            let mut ctx = WebrenderRenderContext::new(&self, root, &mut elements);
+            root.inspect().renderer().render(&mut ctx);
+        }
 
-    fn build_display_list_recursive(&self, builder: &mut DisplayListBuilder, node: &Component) {
-        use rand::{random, Closed01};
-
-        let layout_node = self.get_layout_node(node);
-        let layout = layout_node.get_layout();
-
-        let color = ColorF::new(random::<Closed01<f32>>().0, random::<Closed01<f32>>().0, random::<Closed01<f32>>().0, 1.0);
-        let bounds = LayoutRect::new(
-            LayoutPoint::new(layout.left, layout.top),
-            LayoutSize::new(layout.width, layout.height)
-        );
-        debug!("layout: {:?}", layout);
-        debug!("bounds: {:?}", bounds);
-
-        builder.push_rect(bounds, None, color);
-
-        for child in node.inspect().children() {
-            self.build_display_list_recursive(builder, child);
+        for element in elements {
+            match element {
+                RenderElement::Rect(rect, color) => {
+                    builder.push_rect(rect, None, color);
+                }
+            }
         }
     }
 
@@ -94,5 +85,47 @@ impl LayoutContext {
 
             Some(node)
         }
+    }
+}
+
+struct WebrenderRenderContext<'a> {
+    layout_context: &'a LayoutContext,
+    component: &'a Component,
+    elements: &'a mut Vec<RenderElement>,
+}
+
+impl<'a> WebrenderRenderContext<'a> {
+    pub fn new(layout_context: &'a LayoutContext, component: &'a Component, elements: &'a mut Vec<RenderElement>) -> WebrenderRenderContext<'a> {
+        WebrenderRenderContext {
+            layout_context,
+            component,
+            elements,
+        }
+    }
+}
+
+impl<'a> RenderContext for WebrenderRenderContext<'a> {
+    fn render(&mut self) {
+        self.component.inspect().renderer().render(self);
+    }
+
+    fn push(&mut self, e: RenderElement) {
+        self.elements.push(e);
+    }
+
+    fn next(&mut self) {
+        for child in self.component.inspect().children().iter() {
+            let mut child_context = WebrenderRenderContext::new(self.layout_context, child, self.elements);
+            child_context.render();
+        }
+    }
+
+    fn bounds(&self) -> LayoutRect {
+        let layout = &self.layout_context.get_layout(self.component);
+
+        LayoutRect::new(
+            LayoutPoint::new(layout.left, layout.top),
+            LayoutSize::new(layout.width, layout.height)
+        )
     }
 }

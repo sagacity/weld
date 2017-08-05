@@ -1,12 +1,14 @@
 extern crate weld;
 extern crate futures;
 extern crate pretty_env_logger;
+extern crate webrender;
 
 use weld::application::Application;
 use weld::model::*;
 use weld::layout::{FlexDirection, Percent, Point, Wrap};
 use weld::layout::FlexStyle::*;
 use weld::layout::Align::*;
+use webrender::api::*;
 
 #[derive(Debug)]
 struct Container {}
@@ -14,7 +16,9 @@ struct Container {}
 impl Renderer for Container {
     fn id(&self) -> &'static str { "Container" }
     fn render(&self, context: &mut RenderContext) {
-        unimplemented!()
+        let bounds = context.bounds();
+        context.push(RenderElement::Rect(bounds, ColorF::new(1.0, 0.0, 0.0, 1.0)));
+        context.next();
     }
 }
 
@@ -28,7 +32,9 @@ struct Button {}
 impl Renderer for Button {
     fn id(&self) -> &'static str { "Button" }
     fn render(&self, context: &mut RenderContext) {
-        unimplemented!()
+        let bounds = context.bounds();
+        context.push(RenderElement::Rect(bounds, ColorF::new(0.0, 0.0, 1.0, 1.0)));
+        context.next();
     }
 }
 

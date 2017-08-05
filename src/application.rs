@@ -6,7 +6,6 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use futures::Stream;
 use tokio_core::reactor::Core;
-use webrender::api::*;
 //use component::handle_event;
 
 pub struct Application {

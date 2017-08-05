@@ -43,6 +43,7 @@ impl<'a> RenderContext for TestRenderContext<'a> {
     }
 
     fn push(&mut self, _: RenderElement) {
+        unimplemented!()
     }
 
     fn next(&mut self) {
@@ -51,6 +52,10 @@ impl<'a> RenderContext for TestRenderContext<'a> {
             child_context.render();
             self.elements.extend(child_context.elements);
         }
+    }
+
+    fn bounds(&self) -> LayoutRect {
+        unimplemented!()
     }
 }
 
