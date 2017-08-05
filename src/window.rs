@@ -7,12 +7,27 @@ use layout_context::LayoutContext;
 use futures::{Async, Poll, Stream};
 use futures::task;
 use model::Component;
-use events;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
 use std::collections::VecDeque;
+
+#[derive(Debug)]
+pub enum WindowEvent {
+    ApplicationClosed,
+    WindowClosed,
+    NotifyRenderComplete,
+    Interaction(Interaction),
+    GlutinEvent(glutin::Event),
+    GlutinWindowEvent(glutin::WindowEvent)
+}
+
+#[derive(Debug)]
+pub enum Interaction {
+    Pressed(WorldPoint),
+    Released(WorldPoint)
+}
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct Epoch(pub u32);
@@ -26,20 +41,20 @@ impl Epoch {
 }
 
 struct Notifier {
-    window_events_tx: mpsc::Sender<events::Event>
+    window_events_tx: mpsc::Sender<WindowEvent>
 }
 
 impl RenderNotifier for Notifier {
     fn new_frame_ready(&mut self) {
         info!("new_frame_ready");
         #[cfg(not(target_os = "android"))]
-        self.window_events_tx.send(events::Event::NotifyRenderComplete).unwrap();
+        self.window_events_tx.send(WindowEvent::NotifyRenderComplete).unwrap();
     }
 
     fn new_scroll_frame_ready(&mut self, _composite_needed: bool) {
         info!("new_scroll_frame_ready");
         #[cfg(not(target_os = "android"))]
-        self.window_events_tx.send(events::Event::NotifyRenderComplete).unwrap();
+        self.window_events_tx.send(WindowEvent::NotifyRenderComplete).unwrap();
     }
 }
 
@@ -79,7 +94,7 @@ pub struct WebrenderWindow;
 
 impl WebrenderWindow {
     pub fn new(title: &'static str, layout_context: Rc<RefCell<LayoutContext>>) -> (RendererHandle, EventStream) {
-        let (window_events_tx, window_events_rx) = mpsc::channel::<events::Event>();
+        let (window_events_tx, window_events_rx) = mpsc::channel::<WindowEvent>();
 
         let window = glutin::WindowBuilder::new()
             .with_title(title)
@@ -146,13 +161,13 @@ impl WebrenderWindow {
 
 pub struct EventStream {
     glutin_events: glutin::EventsLoop,
-    window_events: mpsc::Receiver<events::Event>,
-    events: VecDeque<events::Event>,
+    window_events: mpsc::Receiver<WindowEvent>,
+    events: VecDeque<WindowEvent>,
     mouse: WorldPoint,
 }
 
 impl Stream for EventStream {
-    type Item = events::Event;
+    type Item = WindowEvent;
     type Error = ();
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -163,20 +178,20 @@ impl Stream for EventStream {
         self.glutin_events.poll_events(|event| {
             let weld_event = match event {
                 glutin::Event::WindowEvent { event, .. } => match event {
-                    glutin::WindowEvent::Closed => events::Event::WindowClosed,
+                    glutin::WindowEvent::Closed => WindowEvent::WindowClosed,
                     glutin::WindowEvent::MouseMoved { position: (x, y), .. } => {
                         mouse = WorldPoint::new(x as f32, y as f32);
-                        events::Event::GlutinWindowEvent(event)
+                        WindowEvent::GlutinWindowEvent(event)
                     },
                     glutin::WindowEvent::MouseInput { button: glutin::MouseButton::Left, state: glutin::ElementState::Pressed, .. } => {
-                        events::Event::Interaction(events::Interaction::Pressed(mouse))
+                        WindowEvent::Interaction(Interaction::Pressed(mouse))
                     },
                     glutin::WindowEvent::MouseInput { button: glutin::MouseButton::Left, state: glutin::ElementState::Released, .. } => {
-                        events::Event::Interaction(events::Interaction::Released(mouse))
+                        WindowEvent::Interaction(Interaction::Released(mouse))
                     },
-                    _ => events::Event::GlutinWindowEvent(event)
+                    _ => WindowEvent::GlutinWindowEvent(event)
                 },
-                _ => events::Event::GlutinEvent(event)
+                _ => WindowEvent::GlutinEvent(event)
             };
 
             polled_events.push(weld_event);
@@ -196,7 +211,7 @@ impl Stream for EventStream {
         match self.events.pop_front() {
             Some(event) => {
                 match event {
-                    events::Event::WindowClosed => Ok(Async::Ready(None)),
+                    WindowEvent::WindowClosed => Ok(Async::Ready(None)),
                     _ => Ok(Async::Ready(Some(event)))
                 }
             },

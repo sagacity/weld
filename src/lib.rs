@@ -12,7 +12,6 @@ extern crate futures;
 pub extern crate yoga;
 
 pub mod application;
-pub mod events;
 pub mod layout_context;
 pub mod model;
 pub mod window;

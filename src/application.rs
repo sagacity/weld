@@ -1,6 +1,5 @@
 use model::{Component, State};
-use window::WebrenderWindow;
-use events::{Event, Interaction};
+use window::{WindowEvent, WebrenderWindow};
 use layout_context::LayoutContext;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -36,15 +35,15 @@ impl Application {
         let event_logger = event_stream.for_each(|event| {
             //println!("event: {:?}", event);
             match event {
-                Event::Interaction(_) => {
+                WindowEvent::Interaction(_) => {
                     //self.handle_interaction(&event, &tree.lock().unwrap());
                     Ok(())
                 },
-                Event::NotifyRenderComplete => {
+                WindowEvent::NotifyRenderComplete => {
                     renderer.update();
                     Ok(())
                 },
-                Event::ApplicationClosed => {
+                WindowEvent::ApplicationClosed => {
                     //renderer.stop();
                     Err(())
                 },
