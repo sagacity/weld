@@ -8,7 +8,6 @@ extern crate webrender;
 extern crate rand;
 extern crate tokio_core;
 extern crate futures;
-extern crate ego_tree;
 
 pub extern crate yoga;
 

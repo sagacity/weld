@@ -12,6 +12,7 @@ use weld::layout::Align::*;
 struct Container {}
 
 impl Renderer for Container {
+    fn id(&self) -> &'static str { "Container" }
     fn render(&self, context: &mut RenderContext) {
         unimplemented!()
     }
@@ -25,6 +26,7 @@ fn container() -> Component {
 struct Button {}
 
 impl Renderer for Button {
+    fn id(&self) -> &'static str { "Button" }
     fn render(&self, context: &mut RenderContext) {
         unimplemented!()
     }

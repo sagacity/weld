@@ -21,6 +21,7 @@ impl<S: State + Sized> From<S> for Component {
 }
 
 pub trait Renderer {
+    fn id(&self) -> &'static str;
     fn render(&self, context: &mut RenderContext);
 }
 
