@@ -1,5 +1,5 @@
 use webrender::api::*;
-use model::{Component, ComponentId, RenderContext, RenderElement};
+use model::{Component, ComponentId, InspectableComponent, RenderContext, RenderElement};
 use std::collections::HashMap;
 use std::cell::{Ref, RefMut, RefCell};
 use layout;
@@ -15,7 +15,7 @@ impl LayoutContext {
         }
     }
 
-    pub fn get_layout(&self, node: &Component) -> layout::Layout {
+    pub fn get_layout(&self, node: &InspectableComponent) -> layout::Layout {
         self.get_layout_node(node).get_layout()
     }
 
@@ -59,12 +59,12 @@ impl LayoutContext {
         }
     }
 
-    fn get_layout_node(&self, node: &Component) -> Ref<layout::Node> {
-        self.layout_nodes.get(node.inspect().id()).unwrap().borrow()
+    fn get_layout_node(&self, node: &InspectableComponent) -> Ref<layout::Node> {
+        self.layout_nodes.get(node.id()).unwrap().borrow()
     }
 
-    fn get_layout_node_mut(&self, node: &Component) -> RefMut<layout::Node> {
-        self.layout_nodes.get(node.inspect().id()).unwrap().borrow_mut()
+    fn get_layout_node_mut(&self, node: &InspectableComponent) -> RefMut<layout::Node> {
+        self.layout_nodes.get(node.id()).unwrap().borrow_mut()
     }
 
     pub fn find_node_at<'a>(&self, point: WorldPoint, root: &'a Component) -> Option<&'a Component> {
@@ -90,12 +90,12 @@ impl LayoutContext {
 
 struct WebrenderRenderContext<'a> {
     layout_context: &'a LayoutContext,
-    component: &'a Component,
+    component: &'a InspectableComponent,
     elements: &'a mut Vec<RenderElement>,
 }
 
 impl<'a> WebrenderRenderContext<'a> {
-    pub fn new(layout_context: &'a LayoutContext, component: &'a Component, elements: &'a mut Vec<RenderElement>) -> WebrenderRenderContext<'a> {
+    pub fn new(layout_context: &'a LayoutContext, component: &'a InspectableComponent, elements: &'a mut Vec<RenderElement>) -> WebrenderRenderContext<'a> {
         WebrenderRenderContext {
             layout_context,
             component,
@@ -106,7 +106,7 @@ impl<'a> WebrenderRenderContext<'a> {
 
 impl<'a> RenderContext for WebrenderRenderContext<'a> {
     fn render(&mut self) {
-        self.component.inspect().renderer().render(self);
+        self.component.renderer().render(self);
     }
 
     fn push(&mut self, e: RenderElement) {
@@ -114,8 +114,8 @@ impl<'a> RenderContext for WebrenderRenderContext<'a> {
     }
 
     fn next(&mut self) {
-        for child in self.component.inspect().children().iter() {
-            let mut child_context = WebrenderRenderContext::new(self.layout_context, child, self.elements);
+        for child in self.component.children().iter() {
+            let mut child_context = WebrenderRenderContext::new(self.layout_context, child.inspect(), self.elements);
             child_context.render();
         }
     }
