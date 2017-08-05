@@ -6,7 +6,7 @@ use webrender::api::*;
 use layout_context::LayoutContext;
 use futures::{Async, Poll, Stream};
 use futures::task;
-use component::Component;
+use model::Component;
 use events;
 use std::rc::Rc;
 use std::cell::RefCell;

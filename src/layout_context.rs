@@ -1,5 +1,5 @@
 use webrender::api::*;
-use component::{Component, ComponentId};
+use model::{Component, ComponentId};
 use std::collections::HashMap;
 use std::cell::{Ref, RefMut, RefCell};
 use layout;
@@ -29,11 +29,11 @@ impl LayoutContext {
 
     fn update_layout_recursive(&mut self, node: &Component) {
         {
-            let layout_node = self.layout_nodes.entry(*node.id()).or_insert_with(|| RefCell::new(layout::Node::new()));
-            layout_node.borrow_mut().apply_styles(node.styles());
+            let layout_node = self.layout_nodes.entry(*node.inspect().id()).or_insert_with(|| RefCell::new(layout::Node::new()));
+            layout_node.borrow_mut().apply_styles(node.inspect().styles());
         }
 
-        for child in node.children() {
+        for child in node.inspect().children() {
             self.update_layout_recursive(child);
 
             let mut layout_node = self.get_layout_node_mut(node);
@@ -63,17 +63,17 @@ impl LayoutContext {
 
         builder.push_rect(bounds, None, color);
 
-        for child in node.children() {
+        for child in node.inspect().children() {
             self.build_display_list_recursive(builder, child);
         }
     }
 
     fn get_layout_node(&self, node: &Component) -> Ref<layout::Node> {
-        self.layout_nodes.get(node.id()).unwrap().borrow()
+        self.layout_nodes.get(node.inspect().id()).unwrap().borrow()
     }
 
     fn get_layout_node_mut(&self, node: &Component) -> RefMut<layout::Node> {
-        self.layout_nodes.get(node.id()).unwrap().borrow_mut()
+        self.layout_nodes.get(node.inspect().id()).unwrap().borrow_mut()
     }
 
     pub fn find_node_at<'a>(&self, point: WorldPoint, root: &'a Component) -> Option<&'a Component> {
@@ -86,7 +86,7 @@ impl LayoutContext {
         if !rect.contains(&point) {
             None
         } else {
-            for child_id in node.children() {
+            for child_id in node.inspect().children() {
                 if let Some(found_in_child) = self.find_node_at_recursive(point, child_id) {
                     return Some(found_in_child);
                 }
@@ -94,47 +94,5 @@ impl LayoutContext {
 
             Some(node)
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use euclid::size2;
-    use component::panel;
-    use layout::*;
-
-    #[test]
-    fn can_build_list() {
-        /*let tree = panel(vec![
-            FlexStyle::Width(1000.point()),
-            FlexStyle::Height(1000.point()),
-            FlexStyle::FlexDirection(FlexDirection::Row)
-        ], vec![
-            panel(vec![
-                FlexStyle::Width(30.percent()),
-                FlexStyle::Height(100.percent())
-            ], vec![]),
-            panel(vec![
-                FlexStyle::Width(70.percent()),
-                FlexStyle::Height(100.percent())
-            ], vec![]),
-        ]);
-
-        let size = size2(1000.0, 1000.0);
-        let mut layout_context = LayoutContext::new();
-        layout_context.update_layout(&tree, &size);
-
-        let sizes = vec![
-            layout_context.get_layout(&tree),
-            layout_context.get_layout(&tree.children()[0]),
-            layout_context.get_layout(&tree.children()[1]),
-        ];
-
-        assert_eq!(sizes, vec![
-            Layout { left: 0.0, right: 0.0, top: 0.0, bottom: 0.0, width: 1000.0, height: 1000.0 },
-            Layout { left: 0.0, right: 0.0, top: 0.0, bottom: 0.0, width: 300.0, height: 1000.0 },
-            Layout { left: 300.0, right: 0.0, top: 0.0, bottom: 0.0, width: 700.0, height: 1000.0 },
-        ]);*/
     }
 }
