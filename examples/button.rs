@@ -1,7 +1,7 @@
 extern crate weld;
-extern crate futures;
 extern crate pretty_env_logger;
 extern crate webrender;
+extern crate rand;
 
 use weld::application::Application;
 use weld::model::*;
@@ -10,6 +10,7 @@ use weld::layout::{FlexDirection, Percent, Point, Wrap};
 use weld::layout::FlexStyle::*;
 use weld::layout::Align::*;
 use webrender::api::*;
+use rand::{random, Closed01};
 
 #[derive(Debug)]
 struct Container {}
@@ -28,24 +29,29 @@ fn container() -> Component {
 }
 
 #[derive(Debug)]
-struct Button {}
+struct Button {
+    color: ColorF,
+}
 
 impl Renderer for Button {
     fn id(&self) -> &'static str { "Button" }
     fn render(&self, context: &mut RenderContext) {
         let bounds = context.bounds();
-        context.push(RenderElement::Rect(bounds, ColorF::new(0.0, 0.0, 1.0, 1.0)));
+        context.push(RenderElement::Rect(bounds, self.color));
         context.next();
     }
 }
 
-fn button() -> Component {
-    Component::new(Button {})
+fn button(color: &ColorF) -> Component {
+    Component::new(Button {
+        color: color.clone()
+    })
 }
 
 #[derive(Clone, Debug)]
 struct MyAppState {
     button_width: i32,
+    button_color: ColorF,
 }
 
 impl State for MyAppState {
@@ -60,7 +66,7 @@ impl State for MyAppState {
                 FlexWrap(Wrap::Wrap)
             ])
             .child(
-                button()
+                button(&self.button_color)
                     .styles(vec![
                         Width(self.button_width.point()),
                         Height(32.point()),
@@ -71,12 +77,18 @@ impl State for MyAppState {
                             Interaction::Pressed => {
                                 println!("pressed!");
                                 Ok(Self {
-                                    button_width: state.button_width + 5
+                                    button_width: state.button_width + 5,
+                                    ..state
                                 })
                             }
                             Interaction::Released => {
                                 println!("released!");
-                                Ok(state)
+
+                                let button_color = ColorF::new(random::<Closed01<f32>>().0, random::<Closed01<f32>>().0, random::<Closed01<f32>>().0, 1.0);
+                                Ok(Self {
+                                    button_color,
+                                    ..state
+                                })
                             }
                         }
                     }))
@@ -88,7 +100,8 @@ fn main() {
     pretty_env_logger::init().unwrap();
 
     let app = Application::new("Demo", MyAppState {
-        button_width: 100
+        button_width: 100,
+        button_color: ColorF::new(0.0, 0.0, 1.0, 1.0),
     });
 
     app.run();
