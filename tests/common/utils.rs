@@ -1,4 +1,5 @@
 use weld::model::*;
+use webrender::api::LayoutRect;
 
 #[macro_export]
 macro_rules! impl_dummy_renderer {

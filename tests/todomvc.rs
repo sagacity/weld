@@ -1,4 +1,5 @@
 extern crate weld;
+extern crate webrender;
 
 use weld::model::*;
 
