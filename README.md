@@ -10,5 +10,4 @@ The concepts are quite similar to libraries like React, Elm and Flutter:
     $ cargo build --release
 
 # Example
------------
     $ cargo run --release --example button
