@@ -6,7 +6,7 @@ use webrender::api::*;
 use layout_context::LayoutContext;
 use futures::{Async, Poll, Stream};
 use futures::task;
-use model::Component;
+use model::{Component, Event};
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
@@ -18,16 +18,18 @@ pub enum WindowEvent {
     ApplicationClosed,
     WindowClosed,
     NotifyRenderComplete,
-    Interaction(Interaction),
+    Interaction(WorldPoint, Interaction),
     GlutinEvent(glutin::Event),
     GlutinWindowEvent(glutin::WindowEvent)
 }
 
 #[derive(Debug)]
 pub enum Interaction {
-    Pressed(WorldPoint),
-    Released(WorldPoint)
+    Pressed,
+    Released,
 }
+
+impl Event for Interaction {}
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct Epoch(pub u32);
@@ -187,10 +189,10 @@ impl Stream for EventStream {
                         WindowEvent::GlutinWindowEvent(event)
                     },
                     glutin::WindowEvent::MouseInput { button: glutin::MouseButton::Left, state: glutin::ElementState::Pressed, .. } => {
-                        WindowEvent::Interaction(Interaction::Pressed(mouse))
+                        WindowEvent::Interaction(mouse, Interaction::Pressed)
                     },
                     glutin::WindowEvent::MouseInput { button: glutin::MouseButton::Left, state: glutin::ElementState::Released, .. } => {
-                        WindowEvent::Interaction(Interaction::Released(mouse))
+                        WindowEvent::Interaction(mouse, Interaction::Released)
                     },
                     _ => WindowEvent::GlutinWindowEvent(event)
                 },

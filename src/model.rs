@@ -3,6 +3,7 @@ use std::any::{Any, TypeId};
 use std::result::Result;
 use std::marker::PhantomData;
 use std::borrow::Borrow;
+use std::fmt;
 use layout::FlexStyle;
 use snowflake::ProcessUniqueId;
 use webrender::api::{LayoutRect, ColorF};
@@ -11,7 +12,7 @@ use webrender::api::{LayoutRect, ColorF};
 
 pub trait Event where Self: Sized + 'static {}
 
-pub trait State where Self: Sized + Clone + 'static {
+pub trait State where Self: Clone + 'static {
     fn build(&self) -> Component;
 }
 
@@ -35,6 +36,12 @@ pub struct Component {
     children: Vec<Component>,
     callbacks: HashMap<TypeId, Box<StateCallback>>,
     styles: Vec<FlexStyle>,
+}
+
+impl fmt::Debug for Component {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Component {{ id: {} }}", self.id)
+    }
 }
 
 impl Component {

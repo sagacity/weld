@@ -5,6 +5,7 @@ extern crate webrender;
 
 use weld::application::Application;
 use weld::model::*;
+use weld::window::Interaction;
 use weld::layout::{FlexDirection, Percent, Point, Wrap};
 use weld::layout::FlexStyle::*;
 use weld::layout::Align::*;
@@ -43,7 +44,9 @@ fn button() -> Component {
 }
 
 #[derive(Clone, Debug)]
-struct MyAppState {}
+struct MyAppState {
+    button_width: i32,
+}
 
 impl State for MyAppState {
     fn build(&self) -> Component {
@@ -59,10 +62,24 @@ impl State for MyAppState {
             .child(
                 button()
                     .styles(vec![
-                        Width(100.point()),
+                        Width(self.button_width.point()),
                         Height(32.point()),
                     ])
                     .name("button")
+                    .on(Box::new(|state: Self, event| {
+                        match *event {
+                            Interaction::Pressed => {
+                                println!("pressed!");
+                                Ok(Self {
+                                    button_width: state.button_width + 5
+                                })
+                            }
+                            Interaction::Released => {
+                                println!("released!");
+                                Ok(state)
+                            }
+                        }
+                    }))
             )
     }
 }
@@ -70,7 +87,9 @@ impl State for MyAppState {
 fn main() {
     pretty_env_logger::init().unwrap();
 
-    let app = Application::new("Demo");
+    let app = Application::new("Demo", MyAppState {
+        button_width: 100
+    });
 
-    app.run(MyAppState {});
+    app.run();
 }
