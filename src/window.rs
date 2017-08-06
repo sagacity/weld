@@ -66,6 +66,7 @@ pub struct RendererHandle {
     gl_window: glutin::GlWindow,
     renderer: webrender::renderer::Renderer,
     api: webrender::api::RenderApi,
+    document_id: webrender::api::DocumentId,
 }
 
 impl RendererHandle {
@@ -80,7 +81,7 @@ impl RendererHandle {
             info!("render()");
             let layout_size = LayoutSize::new(self.window_size.0 as f32, self.window_size.1 as f32);
 
-            generate_frame(&self.api, &layout_size, &self.epoch.next(), &mut self.layout_context.borrow_mut(), &tree.lock().unwrap());
+            generate_frame(&self.api, &self.document_id, &layout_size, &self.epoch.next(), &mut self.layout_context.borrow_mut(), &tree.lock().unwrap());
             //context.rendered_epoch = context.epoch;
         }
     }
@@ -132,10 +133,11 @@ impl WebrenderWindow {
             ..webrender::RendererOptions::default()
         };
 
-        let (renderer, sender) = webrender::renderer::Renderer::new(gl, opts, DeviceUintSize::new(width, height)).unwrap();
+        let (renderer, sender) = webrender::renderer::Renderer::new(gl, opts).unwrap();
 
         let api = sender.create_api();
-        api.set_root_pipeline(PipelineId(0, 0));
+        let document_id = api.add_document(DeviceUintSize::zero());
+        api.set_root_pipeline(document_id, PipelineId(0, 0));
 
         let notifier = Box::new(Notifier {
             window_events_tx: window_events_tx.clone()
@@ -150,6 +152,7 @@ impl WebrenderWindow {
             gl_window,
             renderer,
             api,
+            document_id,
         }, EventStream {
             glutin_events,
             window_events: window_events_rx,
@@ -226,17 +229,18 @@ impl Stream for EventStream {
     }
 }
 
-fn generate_frame(api: &RenderApi, layout_size: &LayoutSize, epoch: &Epoch, layout_context: &mut LayoutContext, tree: &Component) {
+fn generate_frame(api: &RenderApi, document_id: &DocumentId, layout_size: &LayoutSize, epoch: &Epoch, layout_context: &mut LayoutContext, tree: &Component) {
     info!("generate_frame, epoch: {}", epoch.0);
     let device_size = DeviceUintSize::new(layout_size.width as u32, layout_size.height as u32);
     let root_background_color = ColorF::new(0.0, 0.7, 0.0, 1.0);
-    api.set_window_parameters(device_size, DeviceUintRect::new(DeviceUintPoint::zero(), device_size));
-    api.set_display_list(Some(root_background_color),
+    api.set_window_parameters(*document_id, device_size, DeviceUintRect::new(DeviceUintPoint::zero(), device_size));
+    api.set_display_list(*document_id,
                          webrender::api::Epoch(epoch.0),
+                         Some(root_background_color),
                          *layout_size,
                          build_display_list(&layout_size, layout_context, tree).finalize(),
                          true);
-    api.generate_frame(None);
+    api.generate_frame(*document_id, None);
 }
 
 fn build_display_list(layout_size: &LayoutSize, layout_context: &mut LayoutContext, tree: &Component) -> DisplayListBuilder {
